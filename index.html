@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@300;400;700;800&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="/favicon.png" rel="icon" type="image/png"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary-fixed": "#d4e4f6",
+                        "on-background": "var(--token-on-background)",
+                        "secondary-container": "#394857",
+                        "surface-container-highest": "#333538",
+                        "inverse-surface": "#e2e2e6",
+                        "on-surface": "#e2e2e6",
+                        "surface-tint": "#ffb59e",
+                        "surface-dim": "#111316",
+                        "tertiary-fixed": "#9cf0ff",
+                        "on-primary-container": "var(--token-on-primary-container)",
+                        "tertiary-container": "#009fb2",
+                        "error": "#ffb4ab",
+                        "secondary-fixed-dim": "#b8c8da",
+                        "on-primary": "#5e1700",
+                        "primary-fixed-dim": "#ffb59e",
+                        "on-tertiary-container": "#002f35",
+                        "surface-container-lowest": "#0c0e11",
+                        "secondary": "#b8c8da",
+                        "outline-variant": "var(--token-outline-variant)",
+                        "surface-variant": "#333538",
+                        "on-tertiary": "#00363d",
+                        "on-tertiary-fixed": "#001f24",
+                        "on-secondary-fixed": "#0d1d2a",
+                        "on-surface-variant": "#e6beb2",
+                        "tertiary-fixed-dim": "#00daf3",
+                        "on-error-container": "#ffdad6",
+                        "error-container": "#93000a",
+                        "inverse-primary": "#ae3200",
+                        "on-secondary-fixed-variant": "#394857",
+                        "inverse-on-surface": "#2f3034",
+                        "primary-fixed": "#ffdbd0",
+                        "on-primary-fixed": "#3a0b00",
+                        "tertiary": "#00daf3",
+                        "primary-container": "var(--token-primary-container)",
+                        "surface-container-low": "#1a1c1f",
+                        "background": "#111316",
+                        "primary": "var(--token-primary)",
+                        "surface-container-high": "#282a2d",
+                        "on-secondary-container": "#a7b7c8",
+                        "outline": "#ad897e",
+                        "surface-bright": "#37393d",
+                        "on-error": "#690005",
+                        "surface": "#111316",
+                        "on-primary-fixed-variant": "#852400",
+                        "on-tertiary-fixed-variant": "#004f58",
+                        "on-secondary": "#223240",
+                        "surface-container": "#1e2023"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0px",
+                        "lg": "0px",
+                        "xl": "0px",
+                        "full": "0px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Inter"],
+                        "label": ["Space Grotesk"],
+                        "mono": ["JetBrains Mono"]
+                    }
+                },
+            },
+        }
+    </script>
+<link href="css/design-tokens.css" rel="stylesheet"/>
+</head>
+<body class="bg-background text-on-background font-body">
+<!-- Header/nav -->
+<header class="bg-background docked full-width top-0 flex justify-between items-center w-full px-6 py-4 max-w-full sticky z-50">
+<div class="text-xl font-bold tracking-tighter text-primary-container font-headline">
+            A.SINGH // DATA_ENG
+        </div>
+<nav class="hidden md:flex items-center space-x-8">
+<a class="bg-surface-container-high text-primary-container px-2 py-1 font-headline tracking-tight uppercase text-sm active:translate-y-0.5 transition-transform" href="#systems">Systems</a>
+<a class="text-secondary font-headline tracking-tight uppercase text-sm hover:bg-primary-container hover:text-on-primary-container transition-colors duration-100 px-2 py-1 active:translate-y-0.5 transition-transform" href="#architectures">Architectures</a>
+<a class="text-secondary font-headline tracking-tight uppercase text-sm hover:bg-primary-container hover:text-on-primary-container transition-colors duration-100 px-2 py-1 active:translate-y-0.5 transition-transform" href="#contact">Contact</a>
+</nav>
+<div class="flex items-center space-x-4">
+<button class="text-on-background hover:bg-primary-container hover:text-on-primary-container p-2 transition-colors duration-100 active:translate-y-0.5 transition-transform">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+</button>
+<button class="text-on-background hover:bg-primary-container hover:text-on-primary-container p-2 transition-colors duration-100 active:translate-y-0.5 transition-transform">
+<span class="material-symbols-outlined" data-icon="settings_input_component">settings_input_component</span>
+</button>
+</div>
+</header>
+<main class="blueprint-grid min-h-screen">
+<!-- Hero -->
+<section class="relative pt-32 pb-24 px-8 md:px-16" id="systems">
+<div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
+<div class="md:col-span-8">
+<div class="inline-block px-3 py-1 bg-surface-container-high text-primary font-mono text-[10px] tracking-widest uppercase mb-6">
+                        PORTFOLIO // 2026.SYS
+                    </div>
+<h1 class="text-5xl md:text-8xl font-headline font-extrabold tracking-tighter text-on-background uppercase leading-none mb-8">
+                        ARCHITECTING_<br/>
+<span class="text-primary-container">SCALABLE</span>_<br/>
+                        DATA_SYSTEMS
+                    </h1>
+<p class="max-w-xl text-secondary font-body text-sm leading-relaxed">
+                        3.4 years building production ETL pipelines at Wipro for L'Oreal USA and Citibank. Specializing in SQL optimization, Informatica PowerCenter, and enterprise batch processing — delivering on-time results for Fortune 500 clients.
+                    </p>
+<div class="mt-12 flex flex-wrap gap-4">
+<button class="bg-primary-container text-on-primary-container px-8 py-4 font-headline font-bold uppercase tracking-wider text-sm active:translate-y-1 transition-transform">
+                            INITIALIZE_PROTOCOL
+                        </button>
+<button class="border border-outline-variant/50 text-on-background px-8 py-4 font-headline font-bold uppercase tracking-wider text-sm hover:bg-surface-container-high transition-colors">
+                            VIEW_SCHEMATICS
+                        </button>
+</div>
+</div>
+<div class="md:col-span-4 hidden md:block pl-8 pt-4 bg-surface-container-low/40">
+<div class="flex flex-col space-y-6">
+<div class="space-y-1">
+<div class="text-[10px] text-primary font-mono uppercase tracking-[0.2em]">CURRENT_STATUS</div>
+<div class="text-on-surface font-mono text-xs">READY_FOR_DEPLOYMENT</div>
+</div>
+<div class="space-y-1">
+<div class="text-[10px] text-secondary font-mono uppercase tracking-[0.2em]">LOCATION</div>
+<div class="text-on-surface font-mono text-xs">BENGALURU_IN</div>
+</div>
+<div class="space-y-1">
+<div class="text-[10px] text-secondary font-mono uppercase tracking-[0.2em]">EXPERIENCE</div>
+<div class="text-on-surface font-mono text-xs">3.4_YRS_ACTIVE</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Selected work -->
+<section class="py-24 px-8 md:px-16 bg-surface-container-lowest" id="architectures">
+<div class="max-w-7xl mx-auto">
+<div class="flex justify-between items-end mb-16 pb-4">
+<div>
+<h2 class="text-4xl font-headline font-bold uppercase tracking-tight">SELECTED_WORK</h2>
+<div class="text-[10px] font-mono text-primary mt-2">DEPLOYMENT_LOG.XLSX</div>
+</div>
+<div class="hidden md:block font-mono text-[10px] text-secondary">
+                        TOTAL_ENTRIES: 03 / ACTIVE: 03
+                    </div>
+</div>
+<div class="flex flex-col space-y-4">
+<!-- Project 01 -->
+<div class="group relative flex flex-col md:flex-row justify-between items-start md:items-center p-6 bg-surface-container-low border border-transparent hover:border-primary-container/30 transition-all cursor-pointer">
+<div class="flex items-center space-x-8">
+<span class="text-2xl font-headline font-light text-secondary group-hover:text-primary transition-colors">01</span>
+<div>
+<h3 class="text-xl font-headline font-bold uppercase group-hover:text-primary-container transition-colors">ETL Pipeline // L'Oreal USA</h3>
+<div class="flex space-x-4 mt-2">
+<span class="text-[10px] font-mono bg-surface-container-highest px-2 py-0.5 text-secondary">SQL / INFORMATICA</span>
+<span class="text-[10px] font-mono bg-surface-container-highest px-2 py-0.5 text-secondary">SSMS / SSIS</span>
+</div>
+</div>
+</div>
+<div class="mt-6 md:mt-0 grid grid-cols-2 md:flex md:space-x-12 gap-4">
+<div class="text-left">
+<div class="text-[9px] text-secondary font-mono uppercase tracking-widest">STATUS</div>
+<div class="text-[11px] text-tertiary font-mono">DEPLOYED</div>
+</div>
+<div class="text-left">
+<div class="text-[9px] text-secondary font-mono uppercase tracking-widest">QUERY TIME</div>
+<div class="text-[11px] text-on-surface font-mono">-30% FASTER</div>
+</div>
+<div class="text-left">
+<div class="text-[9px] text-secondary font-mono uppercase tracking-widest">SCOPE</div>
+<div class="text-[11px] text-on-surface font-mono">SALES &amp; FINANCE</div>
+</div>
+</div>
+</div>
+<!-- Project 02 -->
+<div class="group relative flex flex-col md:flex-row justify-between items-start md:items-center p-6 bg-surface-container-low border border-transparent hover:border-primary-container/30 transition-all cursor-pointer">
+<div class="flex items-center space-x-8">
+<span class="text-2xl font-headline font-light text-secondary group-hover:text-primary transition-colors">02</span>
+<div>
+<h3 class="text-xl font-headline font-bold uppercase group-hover:text-primary-container transition-colors">Batch Job Automation // Citibank</h3>
+<div class="flex space-x-4 mt-2">
+<span class="text-[10px] font-mono bg-surface-container-highest px-2 py-0.5 text-secondary">SQL / AUTOSYS</span>
+<span class="text-[10px] font-mono bg-surface-container-highest px-2 py-0.5 text-secondary">TIDAL / SSAS</span>
+</div>
+</div>
+</div>
+<div class="mt-6 md:mt-0 grid grid-cols-2 md:flex md:space-x-12 gap-4">
+<div class="text-left">
+<div class="text-[9px] text-secondary font-mono uppercase tracking-widest">STATUS</div>
+<div class="text-[11px] text-tertiary font-mono">STABLE</div>
+</div>
+<div class="text-left">
+<div class="text-[9px] text-secondary font-mono uppercase tracking-widest">PRODUCTIVITY</div>
+<div class="text-[11px] text-on-surface font-mono">+20% GAIN</div>
+</div>
+<div class="text-left">
+<div class="text-[9px] text-secondary font-mono uppercase tracking-widest">PROCESS</div>
+<div class="text-[11px] text-on-surface font-mono">DAILY_WKLY_MTH</div>
+</div>
+</div>
+</div>
+<!-- Project 03 -->
+<div class="group relative flex flex-col md:flex-row justify-between items-start md:items-center p-6 bg-surface-container-low border border-transparent hover:border-primary-container/30 transition-all cursor-pointer">
+<div class="flex items-center space-x-8">
+<span class="text-2xl font-headline font-light text-secondary group-hover:text-primary transition-colors">03</span>
+<div>
+<h3 class="text-xl font-headline font-bold uppercase group-hover:text-primary-container transition-colors">BGL Time Series Forecasting</h3>
+<div class="flex space-x-4 mt-2">
+<span class="text-[10px] font-mono bg-surface-container-highest px-2 py-0.5 text-secondary">PYTHON / SKLEARN</span>
+<span class="text-[10px] font-mono bg-surface-container-highest px-2 py-0.5 text-secondary">TIME SERIES</span>
+</div>
+</div>
+</div>
+<div class="mt-6 md:mt-0 grid grid-cols-2 md:flex md:space-x-12 gap-4">
+<div class="text-left">
+<div class="text-[9px] text-secondary font-mono uppercase tracking-widest">STATUS</div>
+<div class="text-[11px] text-tertiary font-mono">COMPLETED</div>
+</div>
+<div class="text-left">
+<div class="text-[9px] text-secondary font-mono uppercase tracking-widest">TYPE</div>
+<div class="text-[11px] text-on-surface font-mono">ACADEMIC</div>
+</div>
+<div class="text-left">
+<div class="text-[9px] text-secondary font-mono uppercase tracking-widest">DOMAIN</div>
+<div class="text-[11px] text-on-surface font-mono">HEALTHCARE</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Philosophy -->
+<section class="py-24 px-8 md:px-16">
+<div class="max-w-7xl mx-auto">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
+<div class="order-2 md:order-1">
+<div class="relative group">
+<div class="absolute inset-0 border-2 border-primary-container -m-4 z-0 opacity-20 group-hover:opacity-100 transition-opacity"></div>
+<img alt="High-density server racks" class="relative z-10 w-full aspect-video object-cover grayscale group-hover:grayscale-0 transition-all duration-700" data-alt="Close-up photo of high-density server racks with blue and amber LED lights glowing in a dark technical datacenter environment" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCdnNAG6AdAAZTwP3qPDnem0Lg0ixmQLMgFCHk3xrjsZluBD-QnuBewA0NV4YUqz8TTsAOf6oUwy2ZzXg5XfXg9XTj1aDgLiKUENO5h0Z_lPqNd-fakLGyTnkXVZej5qcgBYaKUzi5aTxrwyVwTZ9D7EjZoTuRL8-Jkgkho7p_KDj0KMg6D_4jqmLQ9ruxAKUqpn3Xbgmpkq3pNMDm7sf2PWwq0HdQQd95MA9hbs3TMj-UOero9ic4VVZ7Xfy7-1FmbpSvD2R4xwsrm"/>
+<div class="absolute bottom-0 right-0 p-4 bg-primary-container text-on-primary-container font-mono text-[10px] z-20">
+                                IMG_SRC: DC_CLUSTER_B
+                            </div>
+</div>
+</div>
+<div class="order-1 md:order-2">
+<div class="text-[10px] text-primary font-mono uppercase tracking-[0.4em] mb-4">ENGINEERING_CORE</div>
+<h2 class="text-5xl font-headline font-extrabold uppercase mb-8 leading-tight">Data as<br/>Infrastructure</h2>
+<div class="space-y-6 text-secondary font-body text-sm leading-relaxed">
+<p>
+                                I view data not as a static resource, but as a kinetic foundation. Built on 3.4 years of enterprise ETL at Wipro, every pipeline I engineer is a first-class, auditable product.
+                            </p>
+<p>
+                                Every component I build adheres to three core tenets: 
+                                <span class="text-on-surface">Determinism</span>, 
+                                <span class="text-on-surface">Fault-Tolerance</span>, and 
+                                <span class="text-on-surface">Observed Scalability</span>.
+                            </p>
+<ul class="space-y-4 pt-4">
+<li class="flex items-center space-x-3">
+<span class="material-symbols-outlined text-primary text-sm" data-icon="check_circle">check_circle</span>
+<span>Fault-Tolerant ETL Design</span>
+</li>
+<li class="flex items-center space-x-3">
+<span class="material-symbols-outlined text-primary text-sm" data-icon="check_circle">check_circle</span>
+<span>Stored Procedure Optimization</span>
+</li>
+<li class="flex items-center space-x-3">
+<span class="material-symbols-outlined text-primary text-sm" data-icon="check_circle">check_circle</span>
+<span>Data Integrity Assurance</span>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Metrics -->
+<section class="py-24 px-8 md:px-16 bg-surface-container-low overflow-hidden">
+<div class="max-w-7xl mx-auto flex flex-col md:flex-row">
+<div class="w-full md:w-1/3 pr-12">
+<h4 class="text-xs font-mono text-secondary uppercase tracking-widest mb-12">SYSTEM_METRICS</h4>
+<div class="space-y-12">
+<div>
+<div class="text-4xl font-headline font-bold text-primary">3.4 YRS</div>
+<div class="text-[10px] font-mono text-secondary uppercase mt-2">TOTAL_EXPERIENCE</div>
+</div>
+<div>
+<div class="text-4xl font-headline font-bold text-primary">30%</div>
+<div class="text-[10px] font-mono text-secondary uppercase mt-2">QUERY_TIME_REDUCTION</div>
+</div>
+<div>
+<div class="text-4xl font-headline font-bold text-primary">20%</div>
+<div class="text-[10px] font-mono text-secondary uppercase mt-2">PRODUCTIVITY_GAIN</div>
+</div>
+</div>
+</div>
+<div class="w-full md:w-2/3 md:pl-12 pt-12 md:pt-0">
+<div class="h-full border border-outline-variant/20 flex flex-col items-center justify-center p-12 relative">
+<span class="material-symbols-outlined text-surface-bright text-9xl absolute pointer-events-none" data-icon="database">database</span>
+<div class="relative z-10 text-center">
+<h5 class="text-lg font-headline font-bold uppercase mb-4">Expansion Potential</h5>
+<p class="text-sm font-body text-secondary max-w-md">
+                                ETL pipelines engineered for client-specific needs — sales, inventory, and financial data — with cross-environment data integrity across production and PAT environments.
+                            </p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Contact -->
+<section class="py-24 px-8 md:px-16 bg-surface-container-lowest" id="contact">
+<div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-16 items-start">
+<!-- Left: Header + Info -->
+<div class="md:col-span-5">
+<div class="text-[10px] font-mono text-primary uppercase tracking-[0.2em] mb-6">CONTACT.INIT // OPEN_CHANNEL</div>
+<h2 class="text-4xl md:text-5xl font-headline font-extrabold uppercase tracking-tighter text-on-background leading-none mb-8">
+                    ESTABLISH_<br/><span class="text-primary-container">CONNECTION</span>
+                </h2>
+<p class="text-secondary font-body text-xs leading-relaxed mb-12 max-w-sm">
+                    Transmission protocols open. Route your signal through the form — response latency typically &lt;24H.
+                </p>
+<div class="space-y-8 pt-8 bg-surface-container-low/30 p-6 md:p-8">
+<div>
+<div class="text-[9px] font-mono text-secondary uppercase tracking-[0.2em] mb-1">ENDPOINT</div>
+<div class="text-on-surface font-mono text-sm">animeshsingh5770@gmail.com</div>
+</div>
+<div>
+<div class="text-[9px] font-mono text-secondary uppercase tracking-[0.2em] mb-1">CLUSTER_REGION</div>
+<div class="text-on-surface font-mono text-sm">BENGALURU // UTC+5:30</div>
+</div>
+<div>
+<div class="text-[9px] font-mono text-secondary uppercase tracking-[0.2em] mb-1">UPLINK_STATUS</div>
+<div class="text-tertiary font-mono text-sm flex items-center gap-2">
+<span class="inline-block w-1.5 h-1.5 bg-tertiary animate-pulse"></span>
+                            LIVE
+                        </div>
+</div>
+</div>
+</div>
+<!-- Right: Form -->
+<div class="md:col-span-7">
+<div class="bg-surface-container-low p-8 md:p-12 border border-outline-variant/10">
+<div class="text-[9px] font-mono text-secondary uppercase tracking-[0.2em] mb-8">TRANSMISSION_FORM // REQUIRED_FIELDS</div>
+<form class="space-y-8" onsubmit="return false;">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<div>
+<label class="block text-[9px] font-mono text-secondary uppercase tracking-[0.2em] mb-3">SENDER_ID</label>
+<input autocomplete="name" class="param-input" name="name" placeholder="YOUR_NAME" type="text"/>
+</div>
+<div>
+<label class="block text-[9px] font-mono text-secondary uppercase tracking-[0.2em] mb-3">RETURN_ADDRESS</label>
+<input autocomplete="email" class="param-input" name="email" placeholder="EMAIL_ADDR" type="email"/>
+</div>
+</div>
+<div>
+<label class="block text-[9px] font-mono text-secondary uppercase tracking-[0.2em] mb-3">SUBJECT_HEADER</label>
+<input class="param-input" name="subject" placeholder="RE: PROJECT_COLLAB" type="text"/>
+</div>
+<div>
+<label class="block text-[9px] font-mono text-secondary uppercase tracking-[0.2em] mb-3">PAYLOAD</label>
+<textarea class="param-input resize-none h-32" name="message" placeholder="DESCRIBE_YOUR_REQUEST..."></textarea>
+</div>
+<div class="flex items-center justify-between pt-4">
+<div class="text-[9px] font-mono text-secondary uppercase tracking-widest">ENCRYPTION: TLS_1.3</div>
+<button class="bg-primary-container text-on-primary-container px-8 py-4 font-headline font-bold uppercase tracking-wider text-sm active:translate-y-1 transition-transform hover:bg-primary hover:text-on-primary" type="submit">
+                                TRANSMIT_SIGNAL
+                            </button>
+</div>
+</form>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-background w-full px-8 py-12 grid grid-cols-1 md:grid-cols-2 gap-8">
+<div>
+<div class="text-primary-container font-black font-headline text-lg uppercase mb-4">ANIMESH_SINGH</div>
+<p class="font-mono text-[10px] tracking-widest uppercase text-secondary">
+                © 2026 ANIMESH_SINGH // BUILD: SUCCESSFUL
+            </p>
+</div>
+<div class="flex flex-col md:items-end justify-between">
+<div class="flex space-x-6">
+<a class="font-mono text-[10px] tracking-widest uppercase text-secondary hover:text-primary-container underline decoration-double transition-colors" href="https://github.com/animeshsingh28/Protfolio-website" rel="noopener noreferrer" target="_blank">GITHUB</a>
+<a class="font-mono text-[10px] tracking-widest uppercase text-secondary hover:text-primary-container underline decoration-double transition-colors" href="https://linkedin.com/in/animesh-singh-69a59317b" rel="noopener noreferrer" target="_blank">LINKEDIN</a>
+</div>
+<div class="mt-8 flex items-center space-x-2 text-primary font-mono text-[8px] animate-pulse">
+<span class="block w-2 h-2 bg-primary"></span>
+<span>SYSTEMS_OPERATIONAL</span>
+</div>
+</div>
+</footer>
+<script src="js/form-handler.js"></script>
+</body></html>

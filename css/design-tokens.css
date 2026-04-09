@@ -1,0 +1,51 @@
+:root {
+    color-scheme: dark;
+    --token-primary-container: #ff571a;
+    --token-on-primary-container: #521300;
+    --token-outline-variant: #5c4037;
+    --token-on-background: #e2e2e6;
+    --token-primary: #ffb59e;
+}
+
+.blueprint-grid {
+    background-image: linear-gradient(to right, color-mix(in srgb, var(--token-outline-variant) 10%, transparent) 1px, transparent 1px),
+                      linear-gradient(to bottom, color-mix(in srgb, var(--token-outline-variant) 10%, transparent) 1px, transparent 1px);
+    background-size: 48px 48px;
+}
+
+.material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+}
+
+::selection {
+    background-color: var(--token-primary-container);
+    color: var(--token-on-primary-container);
+}
+
+.param-input {
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid color-mix(in srgb, var(--token-outline-variant) 50%, transparent);
+    outline: none;
+    box-shadow: none;
+    border-radius: 0;
+    color: var(--token-on-background);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.875rem;
+    padding: 0.75rem 0;
+    width: 100%;
+    transition: border-color 150ms;
+}
+
+.param-input:focus {
+    border-bottom-color: var(--token-primary);
+    box-shadow: none;
+    outline: none;
+}
+
+.param-input::placeholder {
+    color: color-mix(in srgb, var(--token-outline-variant) 60%, transparent);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.7rem;
+}
