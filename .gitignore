@@ -1,0 +1,14 @@
+# Local secret overrides
+api/config.local.php
+api/*.local.php
+.env
+.env.*
+!.env.example
+
+# Python cache
+__pycache__/
+*.pyc
+
+# OS noise
+.DS_Store
+Thumbs.db
