@@ -1,15 +1,18 @@
+/* Space-separated RGB channels so Tailwind can apply opacity modifiers
+   (e.g. border-outline-variant/10) via rgb(var(--token-*) / <alpha-value>).
+   Use as rgb(var(--token-*)) or rgb(var(--token-*) / N%) in custom CSS. */
 :root {
     color-scheme: dark;
-    --token-primary-container: #ff571a;
-    --token-on-primary-container: #521300;
-    --token-outline-variant: #5c4037;
-    --token-on-background: #e2e2e6;
-    --token-primary: #ffb59e;
+    --token-primary-container: 255 87 26;      /* #ff571a */
+    --token-on-primary-container: 82 19 0;     /* #521300 */
+    --token-outline-variant: 92 64 55;         /* #5c4037 */
+    --token-on-background: 226 226 230;        /* #e2e2e6 */
+    --token-primary: 255 181 158;              /* #ffb59e */
 }
 
 .blueprint-grid {
-    background-image: linear-gradient(to right, color-mix(in srgb, var(--token-outline-variant) 10%, transparent) 1px, transparent 1px),
-                      linear-gradient(to bottom, color-mix(in srgb, var(--token-outline-variant) 10%, transparent) 1px, transparent 1px);
+    background-image: linear-gradient(to right, rgb(var(--token-outline-variant) / 10%) 1px, transparent 1px),
+                      linear-gradient(to bottom, rgb(var(--token-outline-variant) / 10%) 1px, transparent 1px);
     background-size: 48px 48px;
 }
 
@@ -18,33 +21,35 @@
 }
 
 ::selection {
-    background-color: var(--token-primary-container);
-    color: var(--token-on-primary-container);
+    background-color: rgb(var(--token-primary-container));
+    color: rgb(var(--token-on-primary-container));
 }
 
 .param-input {
+    appearance: none;
     background: transparent;
     border: 0;
-    border-bottom: 2px solid color-mix(in srgb, var(--token-outline-variant) 50%, transparent);
+    border-bottom: 2px solid rgb(var(--token-outline-variant) / 50%);
     outline: none;
     box-shadow: none;
     border-radius: 0;
-    color: var(--token-on-background);
+    color: rgb(var(--token-on-background));
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.875rem;
+    line-height: 1.5rem;
     padding: 0.75rem 0;
     width: 100%;
     transition: border-color 150ms;
 }
 
 .param-input:focus {
-    border-bottom-color: var(--token-primary);
+    border-bottom-color: rgb(var(--token-primary));
     box-shadow: none;
     outline: none;
 }
 
 .param-input::placeholder {
-    color: color-mix(in srgb, var(--token-outline-variant) 60%, transparent);
+    color: rgb(var(--token-outline-variant) / 60%);
     text-transform: uppercase;
     letter-spacing: 0.1em;
     font-size: 0.7rem;
