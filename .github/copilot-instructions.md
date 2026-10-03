@@ -11,7 +11,7 @@ Modular static Data Engineer portfolio website with a generated entry page (`ind
 - **Section fragments**: `sections/*.html` contain the top-level content regions (`header-nav`, `hero`, `selected-work`, `philosophy`, `metrics`, `contact`, `footer`)
 - **Shared assets**: `css/design-tokens.css` contains custom CSS atoms and `js/form-handler.js` contains contact form behavior
 - **Build script**: `scripts/build_site.py` assembles the template and section fragments into `index.html`
-- **Tailwind via CDN**: `https://cdn.tailwindcss.com?plugins=forms,container-queries`
+- **Tailwind via CDN**: `https://cdn.tailwindcss.com?plugins=container-queries` — do not add the `forms` plugin; its base input styles load after `css/design-tokens.css` and override `.param-input`
 - **Tailwind config** remains inlined in the template `<head>` via `<script id="tailwind-config">`
 - **No frontend framework**: keep the architecture static and minimal; rebuild with `python scripts/build_site.py`
 
