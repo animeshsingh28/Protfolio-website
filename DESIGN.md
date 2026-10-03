@@ -1,4 +1,3 @@
-```markdown
 # Design System Document: Industrial Precision
 
 ## 1. Overview & Creative North Star: "The Kinetic Blueprint"
@@ -9,7 +8,7 @@ To break the "template" look, we utilize **Intentional Asymmetry**. Rather than 
 ---
 
 ## 2. Colors & Surface Logic
-The palette is rooted in the "Cold Steel" spectrum, punctuated by a high-energy `primary` (#FF4D00) that mimics a warning light or a critical data point.
+The palette is rooted in the "Cold Steel" spectrum, punctuated by a high-energy `primary_container` (#FF571A) that mimics a warning light or a critical data point.
 
 ### The "No-Line" Rule
 Traditional 1px solid borders are strictly prohibited for sectioning. They create visual "stutter." Instead, boundaries are defined through **Background Tonal Shifts**. Use `surface` as your base and `surface_container_low` for secondary sections. The eye should perceive the change in depth through color, not a stroke.
@@ -60,7 +59,7 @@ In this system, we do not "drop shadows"; we "emit light."
 
 ### Input Fields (The "Parameter Inputs")
 *   **Style:** Background `surface_container_lowest`, no borders except for a 2px bottom-accent in `outline_variant`. 
-*   **Focus State:** The bottom accent shifts to `primary` (#FF4D00).
+*   **Focus State:** The bottom accent shifts to `primary` (#FFB59E).
 
 ### Technical Breadcrumbs
 Instead of standard arrows, use forward slashes `/` in `secondary` and monospace type to mimic file paths (e.g., `root / projects / data_pipeline`).
@@ -82,4 +81,4 @@ Instead of standard arrows, use forward slashes `/` in `secondary` and monospace
 ---
 
 ## Director's Final Note
-This system succeeds when it feels like a **terminal interface for a high-value asset**. Every pixel should feel like it was placed there for a functional reason. If an element doesn't serve to communicate data or structure, remove it. Precision is the ultimate luxury.```
+This system succeeds when it feels like a **terminal interface for a high-value asset**. Every pixel should feel like it was placed there for a functional reason. If an element doesn't serve to communicate data or structure, remove it. Precision is the ultimate luxury.

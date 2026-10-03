@@ -120,8 +120,10 @@ Always use named Tailwind tokens — never raw hex. Key tokens:
 - **Form inputs:** Use `.param-input` class (defined in
   `css/design-tokens.css`). Never use Tailwind `ring-*` or `border-*` on
   forms.
-- **Icons:** `<span class="material-symbols-outlined"
+- **Icons:** `<span aria-hidden="true" class="material-symbols-outlined"
   data-icon="icon_name">icon_name</span>` — thin stroke (`wght: 300`).
+  The icon font is subset: add any new icon to `icon_names=` (alphabetical)
+  in the template's Material Symbols link, or it renders as plain text.
 
 ---
 
