@@ -37,11 +37,14 @@ Resend for email notifications). It is hosted on Vercel.
 All content/structure changes MUST be made in the source files, then rebuilt:
 
 ```
-src/index.template.html     ← page shell (head, Tailwind config, placeholders)
+src/index.template.html     ← page shell (head, /css/site.css link, placeholders)
 sections/*.html              ← 7 content fragments (see Section Order below)
-css/design-tokens.css        ← custom CSS atoms and variables
+tailwind.config.js           ← Tailwind v3.4 theme (color tokens, fonts, radius) and content globs
+css/design-tokens.css        ← Tailwind input: @tailwind directives, custom CSS atoms and variables
 js/form-handler.js           ← contact form client-side controller
 ```
+
+`css/site.css` is generated too (compiled Tailwind output). Never edit it directly.
 
 ### Section Order & Placeholder Mapping
 
@@ -61,8 +64,10 @@ js/form-handler.js           ← contact form client-side controller
 python scripts/build_site.py
 ```
 
-Always rebuild `index.html` after editing any source file. The build script
-uses only Python standard library (`pathlib`) — no `pip install` needed.
+Always rebuild after editing any source file, and commit the regenerated
+`css/site.css` and `index.html`. The build script is stdlib-only Python (no
+`pip install`), but it compiles the CSS with a pinned
+`npx tailwindcss@3.4.17`, so Node.js (with npm) must be installed.
 
 ---
 
@@ -145,11 +150,11 @@ Always use named Tailwind tokens — never raw hex. Key tokens:
 ## 5. CSS & Styling Rules
 
 - `css/design-tokens.css` holds shared custom atoms only: `.blueprint-grid`,
-  `.material-symbols-outlined`, `::selection`, `.param-input`, and `:root`
-  CSS variables.
+  `::selection`, `.param-input`, and `:root` CSS variables (base and
+  components layers), plus the `@tailwind` directives.
 - Prefer Tailwind utility classes everywhere else.
-- Do not introduce inline `style=` attributes unless the value truly cannot
-  be expressed as a utility class.
+- Do not introduce inline `style=` attributes or inline `<style>`/`<script>`
+  blocks: the Content-Security-Policy in `vercel.json` blocks them.
 - Do not add component-specific layout CSS to `design-tokens.css` when it
   belongs in a section fragment's Tailwind classes.
 

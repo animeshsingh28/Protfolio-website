@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Static Data Engineer portfolio site with a Python contact-form function, hosted on Vercel (project `protfolio-website`, Git-connected: pushes to `main` deploy production, other branches get previews behind Vercel login). Storage is Neon Postgres, email is Resend. No frontend framework, no package manager, no test suite or linter.
+Static Data Engineer portfolio site with a Python contact-form function, hosted on Vercel (project `protfolio-website`, Git-connected: pushes to `main` deploy production, other branches get previews behind Vercel login). Storage is Neon Postgres, email is Resend. No frontend framework, no `package.json` (Tailwind runs through a pinned `npx`), no test suite or linter.
 
 ## Commands
 
@@ -12,21 +12,24 @@ Static Data Engineer portfolio site with a Python contact-form function, hosted 
 python scripts/build_site.py
 ```
 
-Regenerates root `index.html` from the template and section fragments. It is stdlib-only Python 3, so any interpreter works (the repo `.venv` is optional). The build is deterministic: rebuilding unchanged sources reproduces the committed `index.html` byte-for-byte.
+Compiles `css/design-tokens.css` + `tailwind.config.js` into the minified `css/site.css` (via `npx --yes tailwindcss@<TAILWIND_VERSION>`, pinned to 3.4.17 in the script), then regenerates root `index.html` from the template and section fragments. The script is stdlib-only Python 3, so any interpreter works (the repo `.venv` is optional), but it needs Node.js with npm on `PATH`; it exits non-zero if the Tailwind step fails. The first run downloads the CLI into the npm cache. The build is deterministic: rebuilding unchanged sources reproduces the committed `css/site.css` and `index.html` byte-for-byte (the CLI bundles its autoprefixer/browserslist data, so output depends only on the pinned version).
 
-`python -m http.server` previews the static page, but the form needs the function: run `vercel dev` (Vercel CLI, with env vars pulled via `vercel env pull`) or test against a preview deployment with the PowerShell smoke test in README.md. `index.html` references `/favicon.png` and `/api/contact` by absolute path, so the page must be served from a web root — over `file://` the favicon and form submission break.
+`python -m http.server` previews the static page, but the form needs the function: run `vercel dev` (Vercel CLI, with env vars pulled via `vercel env pull`) or test against a preview deployment with the PowerShell smoke test in README.md. `index.html` references `/css/site.css`, `/favicon.png`, and `/api/contact` by absolute path, so the page must be served from a web root — over `file://` the page renders unstyled and the favicon and form submission break. `http.server` does not send the `vercel.json` headers, so CSP problems only show up on a Vercel deployment (or a local server that adds the header).
 
 ## Deployment (Vercel)
 
-- No build step on Vercel: the committed `index.html` is served as-is, so always rebuild and commit it.
-- `.vercelignore` is an allowlist (`/*` then `!index.html`, `!css`, `!js`, `!favicon.png`, `!api`, `!requirements.txt`, `!vercel.json`). Everything else — sources, docs, agent config, the resume PDF — is deliberately not deployed. A new file the live site needs must be allowed there, or it 404s in production.
+- No build step on Vercel: the committed `index.html` and `css/site.css` are served as-is, so always rebuild and commit both.
+- `.vercelignore` is an allowlist (`/*` then `!index.html`, `!css` minus `/css/design-tokens.css`, `!js`, `!favicon.png`, `!api`, `!requirements.txt`, `!vercel.json`). Everything else — sources (including `tailwind.config.js` and the Tailwind input `css/design-tokens.css`), docs, agent config, the resume PDF — is deliberately not deployed. A new file the live site needs must be allowed there, or it 404s in production.
 - `vercel.json`: `cleanUrls`, security headers on every path, and `maxDuration` for `api/contact.py`. Every `.py` file in `api/` becomes a public function, so keep helpers out of `api/`.
+- The headers include a strict `Content-Security-Policy`: `default-src 'self'`; scripts, styles, and `connect-src`/`form-action` same-origin only, plus Google Fonts (`style-src https://fonts.googleapis.com`, `font-src https://fonts.gstatic.com`) and `img-src 'self' data: https://lh3.googleusercontent.com` (the philosophy image). No `'unsafe-inline'`: inline `<script>` code, `<style>` blocks, and `style=` attributes are blocked (the JSON-LD `application/ld+json` block is data, not script, so it is unaffected). A new external host for any resource must be added to the matching directive, or the browser blocks it in production.
 
 ## Build architecture
 
-- `src/index.template.html` is the page shell: `<head>` (title, meta description, canonical, Open Graph tags, and a JSON-LD `Person` block, all using absolute `https://hornsloth.com/` URLs), fonts (Google Fonts requests only the weights in use: Inter 400, Space Grotesk 300/400/700 — the family has no 800/900, so `font-extrabold`/`font-black` render at 700 — and JetBrains Mono 400; add a weight there before using a new one), Tailwind CDN script, the inline `tailwind.config`, and `<!-- SECTION:<name> -->` placeholders.
+- `src/index.template.html` is the page shell: `<head>` (title, meta description, canonical, Open Graph tags, and a JSON-LD `Person` block, all using absolute `https://hornsloth.com/` URLs), fonts (Google Fonts requests only the weights in use: Inter 400, Space Grotesk 300/400/700 — the family has no 800/900, so `font-extrabold`/`font-black` render at 700 — and JetBrains Mono 400; add a weight there before using a new one), the `/css/site.css` link, and `<!-- SECTION:<name> -->` placeholders. It loads no Tailwind script.
+- Tailwind v3.4 is compiled at build time. `tailwind.config.js` (root) holds the theme — color tokens, fonts, the zeroed `borderRadius` scale, `darkMode: "class"`, no plugins — plus `content` globs (`src/**/*.html`, `sections/**/*.html`, `js/**/*.js`) and a `safelist` for the status-line tone classes `js/form-handler.js` adds at runtime. A class that appears only in a file outside those globs, or is assembled from string pieces, is not generated.
+- `css/design-tokens.css` is the Tailwind input: the three `@tailwind` directives, `:root` tokens and `::selection` in `@layer base`, `.blueprint-grid` and `.param-input` in `@layer components` (so utilities on the same element still win). `css/site.css` is the generated, minified output; never hand-edit it.
 - `sections/<name>.html` fragments are substituted into those placeholders in the order of `SECTION_ORDER` in `scripts/build_site.py`. `header-nav` and `footer` sit outside `<main class="blueprint-grid">`; all other sections are inside it.
-- Root `index.html` is generated but committed, and is the deployed artifact. Never hand-edit it — edit sources, rebuild, and commit the regenerated `index.html` alongside the source change.
+- Root `index.html` and `css/site.css` are generated but committed, and are the deployed artifacts. Never hand-edit them — edit sources, rebuild, and commit the regenerated files alongside the source change.
 - Adding a section requires a new fragment, a placeholder in the template, and an entry in `SECTION_ORDER` (the build raises if a placeholder is missing). Also update the fragment lists in `.github/instructions/section-fragments.instructions.md` and `.github/prompts/*.prompt.md`.
 - Each fragment must begin with its exact marker comment — `<!-- Header/nav -->`, `<!-- Hero -->`, `<!-- Selected work -->`, `<!-- Philosophy -->`, `<!-- Metrics -->`, `<!-- Contact -->`, `<!-- Footer -->` — which differ from the `SECTION:` placeholder names. Fragments never contain `<html>`/`<head>`/`<body>`, the Tailwind config, font links, or global `<script>` tags.
 - Section structure: `<section>` → `<div class="max-w-7xl mx-auto">` → content.
@@ -47,13 +50,13 @@ Non-negotiable rules:
 - Use named Tailwind color tokens, not raw hex.
 - Form fields use the `.param-input` class — never Tailwind `ring-*`/`border-*` on inputs.
 - Icons: `<span aria-hidden="true" class="material-symbols-outlined" data-icon="name">name</span>` (thin stroke via `wght 300`, set by the `@24,300,0,0` part of the font URL; the subset font is static, so CSS `font-variation-settings` has no effect). The icon font is subset: the template's Material Symbols link lists every icon in use in `icon_names=` (alphabetical). A new icon must be added there, or it renders as its literal name. Icon-only links/buttons need an `aria-label`. Buttons get `active:translate-y-1 transition-transform`. No placeholder `href="#"` links.
-- Tailwind utilities only. Custom CSS lives solely in `css/design-tokens.css` (`.blueprint-grid`, `.param-input`, `::selection`) — no new CSS files, `<style>` blocks, or inline `style=`.
+- Tailwind utilities only. Custom CSS lives solely in `css/design-tokens.css` (`.blueprint-grid`, `.param-input`, `::selection`) — no new CSS files, `<style>` blocks, or inline `style=` (the CSP blocks the last two anyway).
 
 ### Color token gotcha
 
-Most tokens are hex values in the template's inline `tailwind.config`. Five — `primary`, `primary-container`, `on-primary-container`, `outline-variant`, `on-background` — are `rgb(var(--token-*) / <alpha-value>)` references whose values live in `:root` of `css/design-tokens.css` as space-separated RGB channels (e.g. `255 87 26`); change those there and keep the channel format.
+Most tokens are hex values in `tailwind.config.js`. Five — `primary`, `primary-container`, `on-primary-container`, `outline-variant`, `on-background` — are `rgb(var(--token-*) / <alpha-value>)` references whose values live in `:root` of `css/design-tokens.css` as space-separated RGB channels (e.g. `255 87 26`); change those there and keep the channel format.
 
-Opacity modifiers (`border-outline-variant/10`, `hover:border-primary-container/30`) work on every token. Keep the `<alpha-value>` form: a plain `var(--token-*)` color makes Tailwind CDN (v3.4) silently generate **no CSS** for opacity modifiers, and a bare `border` then falls back to Tailwind's default light-gray border. In custom CSS, write `rgb(var(--token-*))` or `rgb(var(--token-*) / N%)`; a bare `var(--token-*)` is not a valid color.
+Opacity modifiers (`border-outline-variant/10`, `hover:border-primary-container/30`) work on every token. Keep the `<alpha-value>` form: a plain `var(--token-*)` color makes Tailwind (v3.4) silently generate **no CSS** for opacity modifiers, and a bare `border` then falls back to Tailwind's default light-gray border. In custom CSS, write `rgb(var(--token-*))` or `rgb(var(--token-*) / N%)`; a bare `var(--token-*)` is not a valid color.
 
 ## Contact form backend (`api/`)
 
