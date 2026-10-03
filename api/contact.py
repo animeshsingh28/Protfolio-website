@@ -11,11 +11,20 @@ Environment (set in the Vercel project):
   CONTACT_MAIL_TO   Where notifications go
   CONTACT_MAIL_FROM Sender, on a domain verified in Resend,
                     e.g. "Hornsloth Portfolio <contact@hornsloth.com>"
+  CONTACT_IP_HASH_SECRET
+                    Key for the HMAC-SHA256 of the visitor IP used for rate
+                    limiting. If unset, a plain SHA-256 is used (with a log
+                    warning). Changing it resets every rate-limit window once.
+
+Only JSON bodies are processed. A no-JS form submit (urlencoded or no content
+type) stores nothing and is redirected (303) back to /#contact, where a
+<noscript> note points visitors to email instead.
 """
 
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -24,7 +33,6 @@ import time
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler
-from urllib.parse import parse_qs
 
 import psycopg
 
@@ -81,9 +89,14 @@ def header_safe(value: str) -> str:
     return value.replace("\r", " ").replace("\n", " ").strip()
 
 
+def is_no_js_submit(content_type: str) -> bool:
+    # What a browser sends for the plain HTML form when JavaScript is off.
+    content_type = content_type.strip().lower()
+    return content_type == "" or "application/x-www-form-urlencoded" in content_type
+
+
 def parse_body(content_type: str, raw: bytes) -> dict:
-    content_type = content_type.lower()
-    if "application/json" in content_type:
+    if "application/json" in content_type.lower():
         try:
             data = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, ValueError):
@@ -91,11 +104,17 @@ def parse_body(content_type: str, raw: bytes) -> dict:
         if not isinstance(data, dict):
             raise ApiError(400, "Invalid JSON payload")
         return data
-    # A no-JS form submit arrives urlencoded.
-    if "application/x-www-form-urlencoded" in content_type or content_type == "":
-        parsed = parse_qs(raw.decode("utf-8", errors="replace"), keep_blank_values=True)
-        return {key: values[0] for key, values in parsed.items()}
     raise ApiError(415, "Unsupported payload type")
+
+
+def hash_ip(ip: str) -> str:
+    # Keyed, so the stored hash can't be reversed by hashing every IPv4 address.
+    secret = (os.environ.get("CONTACT_IP_HASH_SECRET") or "").strip()
+    if secret:
+        return hmac.new(secret.encode("utf-8"), ip.encode("utf-8"), hashlib.sha256).hexdigest()
+    # A privacy setting must not take the form down: fall back, but say so.
+    log("CONTACT_IP_HASH_SECRET is not set; using unkeyed SHA-256 for the IP hash")
+    return hashlib.sha256(ip.encode("utf-8")).hexdigest()
 
 
 def validate(data: dict) -> dict:
@@ -211,7 +230,7 @@ def mail_timeout(started: float) -> float | None:
 
 def handle_submission(fields: dict, ip: str, user_agent: str, started: float) -> dict:
     request_id = secrets.token_hex(16)
-    ip_hash = hashlib.sha256(ip.encode("utf-8")).hexdigest()
+    ip_hash = hash_ip(ip)
 
     # autocommit outside the transaction block: the row must be committed
     # before the email goes out.
@@ -271,6 +290,18 @@ class handler(BaseHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(body)
 
+    def redirect_to_form(self) -> None:
+        # 303 makes the browser GET the page, so nothing is resubmitted and
+        # the message never lands in a URL.
+        body = b"See Other: /#contact\n"
+        self.send_response(303)
+        self.send_header("Location", "/#contact")
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def method_not_allowed(self) -> None:
         self.respond(405, {"success": False, "message": "Method not allowed"})
 
@@ -292,7 +323,15 @@ class handler(BaseHTTPRequestHandler):
             if length < 0 or length > MAX_BODY_BYTES:
                 raise ApiError(413, "Payload too large")
 
-            data = parse_body(self.headers.get("Content-Type") or "", self.rfile.read(length))
+            content_type = self.headers.get("Content-Type") or ""
+            raw = self.rfile.read(length)
+            if is_no_js_submit(content_type):
+                # Without JS there is no fill-time value, so the submit can't
+                # pass the bot checks; store nothing and send the visitor back
+                # to the form, where the <noscript> note offers email instead.
+                self.redirect_to_form()
+                return
+            data = parse_body(content_type, raw)
             fields = validate(data)
             user_agent = clean_text((self.headers.get("User-Agent") or "")[:255])
             self.respond(200, handle_submission(fields, self.client_ip(), user_agent, started))
