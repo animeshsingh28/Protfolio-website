@@ -117,7 +117,8 @@ The contact form posts to `/api/contact`, a Python Vercel Function (`api/contact
 - Content type: `application/json` only; nothing else is validated or stored. No-JS / failed-JS browser submits (a navigation, i.e. `Sec-Fetch-Mode: navigate` or `Accept` containing `text/html`, with a urlencoded, multipart, or empty content type) get a `400` HTML page saying the message was not sent, with an email link and a pointer to the browser's Back button (which restores the typed text; a link to `/#contact` would load an empty form). Every other non-JSON request, including API clients that forget `-ContentType "application/json"`, gets a `415` JSON error. The page also has a `<noscript>` note with the email address.
 - Required fields: `name`, `email`, `subject`, `message`
 - Abuse controls: honeypot (`company_website`), fill-time (`form_fill_seconds`), and 5 requests per 5 minutes per IP hash (HMAC-SHA256 keyed by `CONTACT_IP_HASH_SECRET`; plain SHA-256 if it is unset). The raw IP is never stored.
-- Once a submission is stored the response is success even if the email fails; check the Vercel runtime logs and rows with `status = 'email_failed'`
+- Once a submission is stored the response is success even if the email fails; check the Vercel runtime logs and rows with `status = 'email_failed'`. An `email_failed` row whose request id also has a `late delivery` log line was in fact emailed: the mail call ran out of time and was abandoned, then still went through.
+- Time limits (kept under the function's 20s `maxDuration`): DB connect 5s; each DB statement 2s (`statement_timeout`, server-side, so it does not cover a pooler queue or a stalled connection); the email call gets whatever is left of a 14s budget measured from request start, and is skipped (`email_failed`) when less than 1.5s remains.
 
 ### Frontend hook
 
