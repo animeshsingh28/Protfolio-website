@@ -1,6 +1,14 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "www.hornsloth.com" }],
+      "destination": "https://hornsloth.com/:path*",
+      "permanent": true
+    }
+  ],
   "functions": {
     "api/contact.py": {
       "maxDuration": 20

@@ -7,6 +7,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE_PATH = ROOT / "src" / "index.template.html"
 OUTPUT_PATH = ROOT / "index.html"
+# Standalone page Vercel serves for unknown paths; copied as-is.
+NOT_FOUND_SOURCE = ROOT / "src" / "404.html"
+NOT_FOUND_OUTPUT = ROOT / "404.html"
+# Canonical origin, matching the template's canonical/og:url/JSON-LD URLs.
+SITE_URL = "https://hornsloth.com/"
+ROBOTS_OUTPUT = ROOT / "robots.txt"
+SITEMAP_OUTPUT = ROOT / "sitemap.xml"
 SECTION_DIR = ROOT / "sections"
 SECTION_ORDER = [
     ("header-nav", "header-nav.html"),
@@ -94,12 +101,37 @@ def build_html() -> None:
     OUTPUT_PATH.write_text(f"{html.rstrip()}\n", encoding="utf-8")
 
 
+def build_not_found() -> None:
+    html = read_text(NOT_FOUND_SOURCE)
+    NOT_FOUND_OUTPUT.write_text(f"{html.rstrip()}\n", encoding="utf-8")
+
+
+def build_seo_files() -> None:
+    # No <lastmod>: a build date would make every rebuild differ, and search
+    # engines ignore lastmod values that aren't accurate anyway.
+    ROBOTS_OUTPUT.write_text(
+        f"User-agent: *\nAllow: /\n\nSitemap: {SITE_URL}sitemap.xml\n", encoding="utf-8"
+    )
+    SITEMAP_OUTPUT.write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"  <url><loc>{SITE_URL}</loc></url>\n"
+        "</urlset>\n",
+        encoding="utf-8",
+    )
+
+
+OUTPUTS = (CSS_OUTPUT, OUTPUT_PATH, NOT_FOUND_OUTPUT, ROBOTS_OUTPUT, SITEMAP_OUTPUT)
+
+
 def build_site() -> None:
     build_css()
     build_html()
+    build_not_found()
+    build_seo_files()
 
 
 if __name__ == "__main__":
     build_site()
-    print(f"Built {CSS_OUTPUT}")
-    print(f"Built {OUTPUT_PATH}")
+    for path in OUTPUTS:
+        print(f"Built {path}")

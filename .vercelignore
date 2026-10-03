@@ -3,6 +3,9 @@
 # stays private.
 /*
 !index.html
+!404.html
+!robots.txt
+!sitemap.xml
 !css
 # Tailwind input; the page loads the compiled css/site.css.
 /css/design-tokens.css

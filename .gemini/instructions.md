@@ -45,6 +45,8 @@ js/form-handler.js           ← contact form client-side controller
 ```
 
 `css/site.css` is generated too (compiled Tailwind output). Never edit it directly.
+Root `404.html` (copied from `src/404.html`, a standalone page with absolute links),
+`robots.txt`, and `sitemap.xml` are also build output.
 
 ### Section Order & Placeholder Mapping
 
@@ -65,7 +67,7 @@ python scripts/build_site.py
 ```
 
 Always rebuild after editing any source file, and commit the regenerated
-`css/site.css` and `index.html`. The build script is stdlib-only Python (no
+`css/site.css`, `index.html`, `404.html`, `robots.txt`, and `sitemap.xml`. The build script is stdlib-only Python (no
 `pip install`), but it compiles the CSS with a pinned
 `npx tailwindcss@3.4.17`, so Node.js (with npm) must be installed.
 

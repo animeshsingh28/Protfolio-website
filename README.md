@@ -6,12 +6,14 @@ Data Engineer portfolio website built as a modular static source with a generate
 
 - `index.html`: Generated deployable output. Do not edit this directly for normal content/style updates.
 - `src/index.template.html`: Page shell (head, stylesheet link, section placeholders).
+- `src/404.html`: Standalone "page not found" page, copied to root `404.html` by the build.
+- `404.html`, `robots.txt`, `sitemap.xml`: Generated deployable output.
 - `sections/*.html`: Top-level content fragments.
 - `tailwind.config.js`: Tailwind v3.4 config (color tokens, fonts, zeroed radius scale, content globs).
 - `css/design-tokens.css`: Tailwind input: `@tailwind` directives, `:root` tokens, and shared custom CSS atoms (`.blueprint-grid`, `.param-input`, selection).
 - `css/site.css`: Generated, minified stylesheet the page loads. Do not edit it directly.
 - `js/form-handler.js`: Shared client-side form behavior.
-- `scripts/build_site.py`: Build script that compiles `css/site.css` with Tailwind, then assembles template + section fragments into `index.html`.
+- `scripts/build_site.py`: Build script that compiles `css/site.css` with Tailwind, assembles template + section fragments into `index.html`, copies `src/404.html`, and writes `robots.txt` and `sitemap.xml`.
 
 ## Section Source Files
 
@@ -53,7 +55,7 @@ If you are using the workspace virtual environment, run:
 
 ### 3) Verify
 
-- Confirm `css/site.css` and `index.html` were regenerated, and commit both (Vercel serves the committed files as-is).
+- Confirm the build outputs (`css/site.css`, `index.html`, `404.html`, `robots.txt`, `sitemap.xml`) were regenerated, and commit them (Vercel serves the committed files as-is).
 - Serve the repo root (the page uses absolute paths like `/favicon.png`, so `file://` won't work), then check the changed sections at `http://localhost:8765`:
 
 ```powershell
@@ -73,14 +75,14 @@ See `DESIGN.md` and `.github` instructions for full project conventions.
 ## Notes
 
 - Tailwind is compiled at build time into `css/site.css`; the page loads no Tailwind script.
-- Root `index.html` and `css/site.css` are generated from source and should be treated as build output.
+- Root `index.html`, `404.html`, `robots.txt`, `sitemap.xml`, and `css/site.css` are generated from source and should be treated as build output.
 
 ## Deployment (Vercel)
 
-The site is a Git-connected Vercel project: pushing to `main` deploys production, and every other branch gets a preview deployment (behind Vercel login). There is no build step on Vercel; the committed `index.html` is served as-is.
+The site is a Git-connected Vercel project: pushing to `main` deploys production, and every other branch gets a preview deployment (behind Vercel login). There is no build step on Vercel; the committed build outputs are served as-is. The production domain is `hornsloth.com` (DNS on Vercel; `www` redirects to the apex).
 
-- `.vercelignore` is an allowlist: only `index.html`, `css/` (except the Tailwind input `css/design-tokens.css`), `js/`, `favicon.png`, `api/`, `requirements.txt`, and `vercel.json` are deployed. Sources (including `tailwind.config.js`), docs, and the resume PDF stay private. Allow any new runtime file there.
-- `vercel.json` sets `cleanUrls`, security headers (including a strict Content-Security-Policy), and the function's `maxDuration`. The CSP allows only same-origin scripts, styles, and fetches, plus Google Fonts (`fonts.googleapis.com` styles, `fonts.gstatic.com` fonts) and `lh3.googleusercontent.com` images. Inline scripts, `<style>` blocks, and `style=` attributes are blocked; add any new external host to the policy.
+- `.vercelignore` is an allowlist: only `index.html`, `404.html`, `robots.txt`, `sitemap.xml`, `css/` (except the Tailwind input `css/design-tokens.css`), `js/`, `favicon.png`, `api/`, `requirements.txt`, and `vercel.json` are deployed. Sources (including `tailwind.config.js`), docs, and the resume PDF stay private. Allow any new runtime file there.
+- `vercel.json` sets `cleanUrls`, the `www` → apex redirect, security headers (including a strict Content-Security-Policy), and the function's `maxDuration`. The CSP allows only same-origin scripts, styles, and fetches, plus Google Fonts (`fonts.googleapis.com` styles, `fonts.gstatic.com` fonts) and `lh3.googleusercontent.com` images. Inline scripts, `<style>` blocks, and `style=` attributes are blocked; add any new external host to the policy.
 
 ## Contact Backend (Vercel Function)
 

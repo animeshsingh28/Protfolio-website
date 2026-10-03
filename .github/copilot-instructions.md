@@ -11,7 +11,7 @@ Modular static Data Engineer portfolio website with a generated entry page (`ind
 - **Section fragments**: `sections/*.html` contain the top-level content regions (`header-nav`, `hero`, `selected-work`, `philosophy`, `metrics`, `contact`, `footer`)
 - **Shared assets**: `css/design-tokens.css` is the Tailwind input (`@tailwind` directives, `:root` tokens, custom CSS atoms) and `js/form-handler.js` contains contact form behavior
 - **Tailwind config**: root `tailwind.config.js` (Tailwind v3.4: colors, fonts, zeroed radius scale, `content` globs, safelist). No plugins — do not add the `forms` plugin; its base input styles would override `.param-input`
-- **Build script**: `scripts/build_site.py` compiles `css/design-tokens.css` into the minified, committed `css/site.css` (pinned `npx tailwindcss@3.4.17`, so Node.js is required) and assembles the template and section fragments into `index.html`
+- **Build script**: `scripts/build_site.py` compiles `css/design-tokens.css` into the minified, committed `css/site.css` (pinned `npx tailwindcss@3.4.17`, so Node.js is required) and assembles the template and section fragments into `index.html`; it also copies `src/404.html` (standalone, absolute links) to `404.html` and writes `robots.txt` and `sitemap.xml`
 - **Content-Security-Policy** (in `vercel.json`): no inline scripts, inline styles, or `style=` attributes; new external hosts (scripts, styles, fonts, images, fetch targets) must be added to the policy
 - **No frontend framework**: keep the architecture static and minimal; rebuild with `python scripts/build_site.py`
 
@@ -54,11 +54,11 @@ Always use the named Tailwind tokens (`bg-surface-container-high`, `text-on-surf
 ## Conventions
 
 - Tailwind utility classes only — no additional CSS files and no inline `style=` attributes (the CSP blocks them); use an arbitrary-value utility such as `text-[10px]` instead
-- Use `src/index.template.html`, `sections/*.html`, `css/design-tokens.css`, `tailwind.config.js`, and `js/form-handler.js` as the editable source files; treat root `index.html` and `css/site.css` as generated output
+- Use `src/index.template.html`, `sections/*.html`, `css/design-tokens.css`, `tailwind.config.js`, and `js/form-handler.js` as the editable source files; treat root `index.html`, `404.html`, `robots.txt`, `sitemap.xml`, and `css/site.css` as generated output
 - Custom CSS atoms live in `css/design-tokens.css`; extend them there instead of reintroducing inline `<style>` blocks
 - Section fragments must keep their top-level exact comment markers: `<!-- Header/nav -->`, `<!-- Hero -->`, `<!-- Selected work -->`, `<!-- Philosophy -->`, `<!-- Metrics -->`, `<!-- Contact -->`, `<!-- Footer -->`
 - Section structure: `<section>` → `<div class="max-w-7xl mx-auto">` → content
 - Icons: `<span aria-hidden="true" class="material-symbols-outlined" data-icon="...">icon_name</span>`
 - `data-icon` attribute mirrors the icon name for easy search/replace
 - The icon font is subset: add any new icon to `icon_names=` (alphabetical) in the template's Material Symbols link, or it renders as plain text
-- After editing source fragments or shared assets, rebuild `css/site.css` and `index.html` with `python scripts/build_site.py` and commit both (Vercel serves the committed files; it has no build step)
+- After editing source fragments or shared assets, rebuild with `python scripts/build_site.py` and commit every regenerated output (Vercel serves the committed files; it has no build step)
