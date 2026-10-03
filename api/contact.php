@@ -142,13 +142,17 @@ try {
         ]);
     }
 
+    // The message is stored, so the visitor is done; resending would only
+    // create a duplicate. Log the failure so the owner can find the row.
     contact_update_status($pdo, $requestId, 'email_failed', false);
-    respond(500, [
-        'success' => false,
-        'message' => 'Submission saved, but notification failed. Please try again later.',
+    error_log('contact.php: notification email failed for request ' . $requestId . ' (row saved with status email_failed)');
+    respond(200, [
+        'success' => true,
+        'message' => 'Message received. I will get back to you soon.',
         'requestId' => $requestId,
     ]);
 } catch (Throwable $error) {
+    error_log('contact.php: ' . get_class($error) . ': ' . $error->getMessage());
     respond(500, [
         'success' => false,
         'message' => 'Server error',

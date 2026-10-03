@@ -9,8 +9,10 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
     }
 
-    // Above PHP's default 30s max_execution_time, so the browser does not give
-    // up while the server is still saving and emailing the message.
+    // Generous, because the server saves the message before sending the email
+    // and mail() can block for a long time. This is not a hard bound on server
+    // time (PHP's max_execution_time excludes time blocked in I/O), so a
+    // timeout is reported as "may have been sent" rather than as a failure.
     const REQUEST_TIMEOUT_MS = 45000;
     const FALLBACK_ERROR = "Transmission failed. Please try again or email me directly.";
     const UNCERTAIN_ERROR = "No reply from the server. Your message may have been sent, so please check with me before resending.";
@@ -67,7 +69,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     contactForm.addEventListener("input", (event) => {
         event.target.removeAttribute?.("aria-invalid");
-        if (showingValidationError && !requiredFields.some((field) => field.hasAttribute("aria-invalid"))) {
+        // Clear the error line only once every required field is actually valid,
+        // not merely edited.
+        if (showingValidationError && requiredFields.every(isFieldValid)) {
             showingValidationError = false;
             setStatus("IDLE", "text-secondary");
         }
@@ -102,9 +106,8 @@ document.addEventListener("DOMContentLoaded", () => {
         contactForm.setAttribute("aria-busy", "true");
         setStatus("TRANSMITTING...", "text-secondary");
 
-        let response;
         try {
-            response = await fetch("/api/contact.php", {
+            const response = await fetch("/api/contact.php", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -112,28 +115,27 @@ document.addEventListener("DOMContentLoaded", () => {
                 body: JSON.stringify(payload),
                 signal: controller.signal,
             });
-        } catch (error) {
-            clearTimeout(timeoutId);
-            const timedOut = error?.name === "AbortError";
-            setStatus(timedOut ? UNCERTAIN_ERROR : "Network error. Please try again.", "text-error");
-            submitButton.disabled = false;
-            contactForm.removeAttribute("aria-busy");
-            return;
-        }
 
-        // Headers arrived, so the server has finished; don't abort the body read.
-        clearTimeout(timeoutId);
+            // The timer keeps running through the body read, so a stalled body
+            // also ends in the "may have been sent" message instead of hanging.
+            let data = {};
+            try {
+                data = await response.json();
+            } catch (error) {
+                if (controller.signal.aborted) {
+                    throw error;
+                }
+            }
 
-        try {
-            const data = await response.json().catch(() => ({}));
-
-            // A requestId means the message is stored, even if the email
-            // notification failed (500), so treat it as received.
-            if ((response.ok && data.success) || data.requestId) {
+            if (response.ok && data.success) {
                 markReceived(data.requestId);
             } else {
                 setStatus(describeError(data.message), "text-error");
             }
+        } catch (error) {
+            // The request may have reached the server before the abort, so
+            // don't invite a blind resend.
+            setStatus(controller.signal.aborted ? UNCERTAIN_ERROR : "Network error. Please try again.", "text-error");
         } finally {
             clearTimeout(timeoutId);
             submitButton.disabled = false;

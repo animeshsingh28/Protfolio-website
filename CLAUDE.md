@@ -51,7 +51,7 @@ Opacity modifiers (`border-outline-variant/10`, `hover:border-primary-container/
 
 ## Contact form backend (`api/`)
 
-Flow: `js/form-handler.js` POSTs JSON to `/api/contact.php` → validation → rate-limit check and insert into `contact_submissions` (`db.php`, `schema.sql`) → notification via `mailer.php` → row status updated `received` → `emailed` / `email_failed`.
+Flow: `js/form-handler.js` POSTs JSON to `/api/contact.php` → validation → rate-limit check and insert into `contact_submissions` (`db.php`, `schema.sql`) → notification via `mailer.php` → row status updated `received` → `emailed` / `email_failed`. Once the row is stored the API returns 200 success even if the email fails (the failure goes to the PHP error log), so visitors don't resend.
 
 - The JS binds to `#contact form`, its `button[type=submit]`, `#contact-form-status`, and hidden `input[name=form_started_at]`, and silently no-ops if any is missing. Field names (`name`, `email`, `subject`, `message`, honeypot `company_website`, `form_started_at`) must stay in sync across `sections/contact.html`, the JS, and `contact.php`.
 - Responses are `{success, message, requestId?}`. The JS maps machine codes (`blocked_*`) to plain-language text in `ERROR_MESSAGES` and shows other messages as-is; the status line is upper-cased by CSS, so keep messages sentence case. The JS also validates the `required` fields client-side and sets `aria-invalid` before sending.
