@@ -58,6 +58,7 @@ Always use the named Tailwind tokens (`bg-surface-container-high`, `text-on-surf
 - Custom CSS atoms live in `css/design-tokens.css`; extend them there instead of reintroducing inline `<style>` blocks
 - Section fragments must keep their top-level exact comment markers: `<!-- Header/nav -->`, `<!-- Hero -->`, `<!-- Selected work -->`, `<!-- Philosophy -->`, `<!-- Metrics -->`, `<!-- Contact -->`, `<!-- Footer -->`
 - Section structure: `<section>` → `<div class="max-w-7xl mx-auto">` → content
-- Icons: `<span class="material-symbols-outlined" data-icon="...">icon_name</span>`
+- Icons: `<span aria-hidden="true" class="material-symbols-outlined" data-icon="...">icon_name</span>`
 - `data-icon` attribute mirrors the icon name for easy search/replace
+- The icon font is subset: add any new icon to `icon_names=` (alphabetical) in the template's Material Symbols link, or it renders as plain text
 - After editing source fragments or shared assets, rebuild `index.html` with `python scripts/build_site.py`

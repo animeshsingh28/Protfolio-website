@@ -12,13 +12,13 @@ Static Data Engineer portfolio site with a small PHP contact-form backend, hoste
 python scripts/build_site.py
 ```
 
-Regenerates root `index.html` from the template and section fragments. It is stdlib-only Python 3, so any interpreter works (the repo `.venv` is optional; the venv path shown in README.md is stale). The build is deterministic: rebuilding unchanged sources reproduces the committed `index.html` byte-for-byte.
+Regenerates root `index.html` from the template and section fragments. It is stdlib-only Python 3, so any interpreter works (the repo `.venv` is optional). The build is deterministic: rebuilding unchanged sources reproduces the committed `index.html` byte-for-byte.
 
 There is no local backend setup; `api/contact.php` is exercised against the deployed host with the PowerShell smoke test in README.md. `index.html` references `/favicon.png` and `/api/contact.php` by absolute path, so the page must be served from a web root — over `file://` the favicon and form submission break.
 
 ## Build architecture
 
-- `src/index.template.html` is the page shell: `<head>`, fonts, Tailwind CDN script, the inline `tailwind.config`, and `<!-- SECTION:<name> -->` placeholders.
+- `src/index.template.html` is the page shell: `<head>` (title, meta description, canonical, Open Graph tags, and a JSON-LD `Person` block, all using absolute `https://hornsloth.com/` URLs), fonts, Tailwind CDN script, the inline `tailwind.config`, and `<!-- SECTION:<name> -->` placeholders.
 - `sections/<name>.html` fragments are substituted into those placeholders in the order of `SECTION_ORDER` in `scripts/build_site.py`. `header-nav` and `footer` sit outside `<main class="blueprint-grid">`; all other sections are inside it.
 - Root `index.html` is generated but committed, and is the deployed artifact. Never hand-edit it — edit sources, rebuild, and commit the regenerated `index.html` alongside the source change.
 - Adding a section requires a new fragment, a placeholder in the template, and an entry in `SECTION_ORDER` (the build raises if a placeholder is missing). Also update the fragment lists in `.github/instructions/section-fragments.instructions.md` and `.github/prompts/*.prompt.md`.
@@ -28,7 +28,7 @@ There is no local backend setup; `api/contact.php` is exercised against the depl
 ## Editing scope
 
 - Treat section fragments as hard edit boundaries: a request about one section changes only that fragment unless a template-level or global change is genuinely required. If a request is ambiguous or spans sections, ask; if an edit must touch several fragments, say so explicitly.
-- Resume-driven updates use `refrence docs/Animesh's Resume.pdf` (directory name is misspelled) as the source of truth. Change factual text only (names, roles, dates, metrics, skills, links) — never classes, layout, or structure. Where the resume and page conflict, the resume wins; if the resume doesn't support a requested change, stop and say what's missing.
+- Resume-driven updates use `refrence docs/Animesh's Resume.pdf` (directory name is misspelled) as the source of truth. Change factual text only (names, roles, dates, metrics, skills, links) — never classes, layout, or structure. Facts such as years of experience and employers also appear in the template `<head>` (meta description, `og:description`, JSON-LD), so update them there too. Where the resume and page conflict, the resume wins; if the resume doesn't support a requested change, stop and say what's missing.
 
 ## Design system ("The Kinetic Blueprint" — full spec in DESIGN.md)
 
@@ -40,22 +40,22 @@ Non-negotiable rules:
 - Typography: `font-headline` (Space Grotesk, uppercase, tight tracking), `font-body` (Inter), `font-mono` (JetBrains Mono, uppercase, `tracking-widest`) for data/metadata. Metadata labels are `text-[9px]`/`text-[10px]` mono with `tracking-[0.2em]`.
 - Use named Tailwind color tokens, not raw hex.
 - Form fields use the `.param-input` class — never Tailwind `ring-*`/`border-*` on inputs.
-- Icons: `<span class="material-symbols-outlined" data-icon="name">name</span>` (thin stroke via `wght 300`). Buttons get `active:translate-y-1 transition-transform`. No placeholder `href="#"` links.
+- Icons: `<span aria-hidden="true" class="material-symbols-outlined" data-icon="name">name</span>` (thin stroke via `wght 300`). The icon font is subset: the template's Material Symbols link lists every icon in use in `icon_names=` (alphabetical). A new icon must be added there, or it renders as its literal name. Icon-only links/buttons need an `aria-label`. Buttons get `active:translate-y-1 transition-transform`. No placeholder `href="#"` links.
 - Tailwind utilities only. Custom CSS lives solely in `css/design-tokens.css` (`.blueprint-grid`, `.param-input`, `::selection`, icon settings) — no new CSS files, `<style>` blocks, or inline `style=`.
 
 ### Color token gotcha
 
-Most tokens are hex values in the template's inline `tailwind.config`. Five — `primary`, `primary-container`, `on-primary-container`, `outline-variant`, `on-background` — are `var(--token-*)` references whose values live in `:root` of `css/design-tokens.css`; change those there.
+Most tokens are hex values in the template's inline `tailwind.config`. Five — `primary`, `primary-container`, `on-primary-container`, `outline-variant`, `on-background` — are `rgb(var(--token-*) / <alpha-value>)` references whose values live in `:root` of `css/design-tokens.css` as space-separated RGB channels (e.g. `255 87 26`); change those there and keep the channel format.
 
-Tailwind CDN (v3.4) generates **no CSS** for opacity modifiers on those five var-based tokens: `border-outline-variant/10` or `hover:border-primary-container/30` silently do nothing, and a bare `border` then falls back to Tailwind's default light-gray border. Opacity modifiers do work on hex tokens (e.g. `bg-surface-container-low/30`). Making them work would mean redefining the vars in channel format (`rgb(var(--x) / <alpha-value>)`), which also breaks the `color-mix()` uses in `design-tokens.css`.
+Opacity modifiers (`border-outline-variant/10`, `hover:border-primary-container/30`) work on every token. Keep the `<alpha-value>` form: a plain `var(--token-*)` color makes Tailwind CDN (v3.4) silently generate **no CSS** for opacity modifiers, and a bare `border` then falls back to Tailwind's default light-gray border. In custom CSS, write `rgb(var(--token-*))` or `rgb(var(--token-*) / N%)`; a bare `var(--token-*)` is not a valid color.
 
 ## Contact form backend (`api/`)
 
 Flow: `js/form-handler.js` POSTs JSON to `/api/contact.php` → validation → rate-limit check and insert into `contact_submissions` (`db.php`, `schema.sql`) → notification via `mailer.php` → row status updated `received` → `emailed` / `email_failed`.
 
 - The JS binds to `#contact form`, its `button[type=submit]`, `#contact-form-status`, and hidden `input[name=form_started_at]`, and silently no-ops if any is missing. Field names (`name`, `email`, `subject`, `message`, honeypot `company_website`, `form_started_at`) must stay in sync across `sections/contact.html`, the JS, and `contact.php`.
-- Responses are `{success, message, requestId?}`; the JS upper-cases `message` into the status line.
-- Abuse controls: non-empty honeypot → 429; filled in under `min_fill_seconds` → 429; more than `rate_limit_max_requests` per window per SHA-256 IP hash → 429. Field length limits in `contact.php` mirror `schema.sql` column sizes — change both together.
+- Responses are `{success, message, requestId?}`. The JS maps machine codes (`blocked_*`) to plain-language text in `ERROR_MESSAGES` and shows other messages as-is; the status line is upper-cased by CSS, so keep messages sentence case. The JS also validates the `required` fields client-side and sets `aria-invalid` before sending.
+- Abuse controls: non-empty honeypot → 429; filled in under `min_fill_seconds` → 429; more than `rate_limit_max_requests` per window per SHA-256 IP hash → 429. Field length limits in `contact.php` mirror `schema.sql` column sizes and the inputs' `maxlength` in `sections/contact.html` — change all three together.
 - Config layering: `api/config.php` (committed placeholders) ← `CONTACT_*` env vars ← `api/config.local.php` (server-only, gitignored, merged via `array_replace_recursive`; template in `config.local.php.example`).
 - `mailer.php` sends with PHP `mail()`; the `mail.smtp` config block is not currently read by any code.
 

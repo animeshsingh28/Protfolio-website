@@ -1,0 +1,11 @@
+# Store text with LF in the repo; Git picks working-tree line endings per OS.
+* text=auto
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.avif binary
+*.ico binary
+*.pdf binary
+*.woff2 binary
