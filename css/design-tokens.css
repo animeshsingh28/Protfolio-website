@@ -1,56 +1,72 @@
-/* Space-separated RGB channels so Tailwind can apply opacity modifiers
-   (e.g. border-outline-variant/10) via rgb(var(--token-*) / <alpha-value>).
-   Use as rgb(var(--token-*)) or rgb(var(--token-*) / N%) in custom CSS. */
-:root {
-    color-scheme: dark;
-    --token-primary-container: 255 87 26;      /* #ff571a */
-    --token-on-primary-container: 82 19 0;     /* #521300 */
-    --token-outline-variant: 92 64 55;         /* #5c4037 */
-    --token-on-background: 226 226 230;        /* #e2e2e6 */
-    --token-primary: 255 181 158;              /* #ffb59e */
+/* Tailwind input: scripts/build_site.py compiles this file with
+   tailwind.config.js into the minified css/site.css, which is what the page
+   links. Edit this file, never css/site.css, then rebuild.
+
+   Layers: :root tokens and ::selection go in `base` (after Preflight); the
+   custom atoms go in `components`, so utility classes on the same element
+   (e.g. `resize-none h-32` on the message textarea) still win, as they did
+   when the Tailwind CDN injected its styles after this stylesheet. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    /* Space-separated RGB channels so Tailwind can apply opacity modifiers
+       (e.g. border-outline-variant/10) via rgb(var(--token-*) / <alpha-value>).
+       Use as rgb(var(--token-*)) or rgb(var(--token-*) / N%) in custom CSS. */
+    :root {
+        color-scheme: dark;
+        --token-primary-container: 255 87 26;      /* #ff571a */
+        --token-on-primary-container: 82 19 0;     /* #521300 */
+        --token-outline-variant: 92 64 55;         /* #5c4037 */
+        --token-on-background: 226 226 230;        /* #e2e2e6 */
+        --token-primary: 255 181 158;              /* #ffb59e */
+    }
+
+    ::selection {
+        background-color: rgb(var(--token-primary-container));
+        color: rgb(var(--token-on-primary-container));
+    }
 }
 
-.blueprint-grid {
-    background-image: linear-gradient(to right, rgb(var(--token-outline-variant) / 10%) 1px, transparent 1px),
-                      linear-gradient(to bottom, rgb(var(--token-outline-variant) / 10%) 1px, transparent 1px);
-    background-size: 48px 48px;
-}
+@layer components {
+    .blueprint-grid {
+        background-image: linear-gradient(to right, rgb(var(--token-outline-variant) / 10%) 1px, transparent 1px),
+                          linear-gradient(to bottom, rgb(var(--token-outline-variant) / 10%) 1px, transparent 1px);
+        background-size: 48px 48px;
+    }
 
-/* Icon weight/fill are fixed by the font request in src/index.template.html
-   (`@24,300,0,0` = opsz 24, wght 300, FILL 0, GRAD 0). The subset font is a
-   static instance, so font-variation-settings here would have no effect. */
+    /* Icon weight/fill are fixed by the font request in src/index.template.html
+       (`@24,300,0,0` = opsz 24, wght 300, FILL 0, GRAD 0). The subset font is a
+       static instance, so font-variation-settings here would have no effect. */
 
-::selection {
-    background-color: rgb(var(--token-primary-container));
-    color: rgb(var(--token-on-primary-container));
-}
+    .param-input {
+        appearance: none;
+        background: transparent;
+        border: 0;
+        border-bottom: 2px solid rgb(var(--token-outline-variant) / 50%);
+        outline: none;
+        box-shadow: none;
+        border-radius: 0;
+        color: rgb(var(--token-on-background));
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.875rem;
+        line-height: 1.5rem;
+        padding: 0.75rem 0;
+        width: 100%;
+        transition: border-color 150ms;
+    }
 
-.param-input {
-    appearance: none;
-    background: transparent;
-    border: 0;
-    border-bottom: 2px solid rgb(var(--token-outline-variant) / 50%);
-    outline: none;
-    box-shadow: none;
-    border-radius: 0;
-    color: rgb(var(--token-on-background));
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.875rem;
-    line-height: 1.5rem;
-    padding: 0.75rem 0;
-    width: 100%;
-    transition: border-color 150ms;
-}
+    .param-input:focus {
+        border-bottom-color: rgb(var(--token-primary));
+        box-shadow: none;
+        outline: none;
+    }
 
-.param-input:focus {
-    border-bottom-color: rgb(var(--token-primary));
-    box-shadow: none;
-    outline: none;
-}
-
-.param-input::placeholder {
-    color: rgb(var(--token-outline-variant) / 60%);
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    font-size: 0.7rem;
+    .param-input::placeholder {
+        color: rgb(var(--token-outline-variant) / 60%);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-size: 0.7rem;
+    }
 }
