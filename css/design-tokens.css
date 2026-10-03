@@ -23,6 +23,7 @@
 }
 
 .param-input {
+    appearance: none;
     background: transparent;
     border: 0;
     border-bottom: 2px solid color-mix(in srgb, var(--token-outline-variant) 50%, transparent);
@@ -32,6 +33,7 @@
     color: var(--token-on-background);
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.875rem;
+    line-height: 1.5rem;
     padding: 0.75rem 0;
     width: 100%;
     transition: border-color 150ms;
