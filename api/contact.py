@@ -17,10 +17,11 @@ Environment (set in the Vercel project):
                     used and a warning is logged once per function instance.
                     Changing it resets every rate-limit window once.
 
-Only application/json bodies are processed. A no-JS form submit (urlencoded or
-no content type) stores nothing and gets a 303 redirect back to /#contact,
-where a <noscript> note points visitors to email instead. Any other content
-type is a 415.
+Only application/json bodies are processed; nothing else reaches validation or
+the database. A no-JS / failed-JS browser submit (a navigation, i.e.
+Sec-Fetch-Mode: navigate or Accept containing text/html, with a urlencoded,
+multipart, or empty content type) gets a 400 HTML page saying the message was
+not sent, with an email link. Every other non-JSON request is a 415 JSON error.
 """
 
 from __future__ import annotations
@@ -92,10 +93,39 @@ def header_safe(value: str) -> str:
     return value.replace("\r", " ").replace("\n", " ").strip()
 
 
-def is_no_js_submit(content_type: str) -> bool:
-    # What a browser sends for the plain HTML form when JavaScript is off.
+FORM_CONTENT_TYPES = ("application/x-www-form-urlencoded", "multipart/form-data")
+
+# Shown when the native form submit reaches the API (JS off, or form-handler.js
+# failed to load or threw). Plain HTML: no inline styles or scripts.
+NO_JS_PAGE = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Message not sent</title>
+</head>
+<body>
+<main>
+<h1>Your message was not sent</h1>
+<p>The contact form needs JavaScript, which did not run in your browser, so nothing was delivered.</p>
+<p>Please email me instead at <a href="mailto:animeshsingh5770@gmail.com">animeshsingh5770@gmail.com</a>.</p>
+<p><a href="/#contact">Back to the contact section</a></p>
+</main>
+</body>
+</html>
+""".encode("utf-8")
+
+
+def is_browser_navigation(sec_fetch_mode: str, accept: str) -> bool:
+    # A native form submit is a top-level navigation; fetch() and API clients
+    # (curl, urllib, Invoke-RestMethod) are not and don't ask for HTML.
+    return sec_fetch_mode.strip().lower() == "navigate" or "text/html" in accept.lower()
+
+
+def is_form_submit(content_type: str) -> bool:
+    # What a browser sends for the plain HTML form (no enctype -> urlencoded).
     content_type = content_type.strip().lower()
-    return content_type == "" or "application/x-www-form-urlencoded" in content_type
+    return content_type == "" or any(kind in content_type for kind in FORM_CONTENT_TYPES)
 
 
 def parse_body(content_type: str, raw: bytes) -> dict:
@@ -307,13 +337,11 @@ class handler(BaseHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(body)
 
-    def redirect_to_form(self) -> None:
-        # 303 makes the browser GET the page, so nothing is resubmitted and
-        # the message never lands in a URL.
-        body = b"See Other: /#contact\n"
-        self.send_response(303)
-        self.send_header("Location", "/#contact")
-        self.send_header("Content-Type", "text/plain; charset=utf-8")
+    def respond_no_js_page(self) -> None:
+        # 400, not a redirect: the visitor must see that nothing was sent.
+        body = NO_JS_PAGE
+        self.send_response(400)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -342,12 +370,14 @@ class handler(BaseHTTPRequestHandler):
 
             content_type = self.headers.get("Content-Type") or ""
             raw = self.rfile.read(length)
-            if is_no_js_submit(content_type):
+            if is_form_submit(content_type) and is_browser_navigation(
+                self.headers.get("Sec-Fetch-Mode") or "", self.headers.get("Accept") or ""
+            ):
                 # Without JS there is no fill-time value, so the submit can't
-                # pass the bot checks; store nothing and send the visitor back
-                # to the form, where the <noscript> note offers email instead.
-                self.redirect_to_form()
+                # pass the bot checks; store nothing and tell the visitor so.
+                self.respond_no_js_page()
                 return
+            # Anything that isn't JSON (API clients included) is a 415 here.
             data = parse_body(content_type, raw)
             fields = validate(data)
             user_agent = clean_text((self.headers.get("User-Agent") or "")[:255])
