@@ -13,7 +13,7 @@
 <div class="space-y-8 pt-8 bg-surface-container-low/30 p-6 md:p-8">
 <div>
 <div class="text-[9px] font-mono text-secondary uppercase tracking-[0.2em] mb-1">ENDPOINT</div>
-<div class="text-on-surface font-mono text-sm">animeshsingh5770@gmail.com</div>
+<a class="text-on-surface font-mono text-sm hover:text-primary-container transition-colors" href="mailto:animeshsingh5770@gmail.com">animeshsingh5770@gmail.com</a>
 </div>
 <div>
 <div class="text-[9px] font-mono text-secondary uppercase tracking-[0.2em] mb-1">CLUSTER_REGION</div>
@@ -22,7 +22,7 @@
 <div>
 <div class="text-[9px] font-mono text-secondary uppercase tracking-[0.2em] mb-1">UPLINK_STATUS</div>
 <div class="text-tertiary font-mono text-sm flex items-center gap-2">
-<span class="inline-block w-1.5 h-1.5 bg-tertiary animate-pulse"></span>
+<span class="inline-block w-1.5 h-1.5 bg-tertiary motion-safe:animate-pulse"></span>
                             LIVE
                         </div>
 </div>
@@ -32,28 +32,28 @@
 <div class="md:col-span-7">
 <div class="bg-surface-container-low p-8 md:p-12 border border-outline-variant/10">
 <div class="text-[9px] font-mono text-secondary uppercase tracking-[0.2em] mb-8">TRANSMISSION_FORM // REQUIRED_FIELDS</div>
-<form class="space-y-8" novalidate>
+<form action="/api/contact.php" class="space-y-8" method="post" novalidate>
 <input aria-hidden="true" autocomplete="off" class="hidden" name="company_website" tabindex="-1" type="text"/>
 <input name="form_started_at" type="hidden"/>
 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
 <div>
-<label class="block text-[9px] font-mono text-secondary uppercase tracking-[0.2em] mb-3">SENDER_ID</label>
-<input autocomplete="name" class="param-input" name="name" placeholder="YOUR_NAME" type="text"/>
+<label class="block text-[9px] font-mono text-secondary uppercase tracking-[0.2em] mb-3" for="contact-name">SENDER_ID <span class="sr-only">(your name)</span></label>
+<input autocomplete="name" class="param-input" id="contact-name" maxlength="100" name="name" placeholder="YOUR_NAME" required="" type="text"/>
 </div>
 <div>
-<label class="block text-[9px] font-mono text-secondary uppercase tracking-[0.2em] mb-3">RETURN_ADDRESS</label>
-<input autocomplete="email" class="param-input" name="email" placeholder="EMAIL_ADDR" type="email"/>
+<label class="block text-[9px] font-mono text-secondary uppercase tracking-[0.2em] mb-3" for="contact-email">RETURN_ADDRESS <span class="sr-only">(your email)</span></label>
+<input autocomplete="email" class="param-input" id="contact-email" maxlength="254" name="email" placeholder="EMAIL_ADDR" required="" type="email"/>
 </div>
 </div>
 <div>
-<label class="block text-[9px] font-mono text-secondary uppercase tracking-[0.2em] mb-3">SUBJECT_HEADER</label>
-<input class="param-input" name="subject" placeholder="RE: PROJECT_COLLAB" type="text"/>
+<label class="block text-[9px] font-mono text-secondary uppercase tracking-[0.2em] mb-3" for="contact-subject">SUBJECT_HEADER <span class="sr-only">(subject)</span></label>
+<input class="param-input" id="contact-subject" maxlength="150" name="subject" placeholder="RE: PROJECT_COLLAB" required="" type="text"/>
 </div>
 <div>
-<label class="block text-[9px] font-mono text-secondary uppercase tracking-[0.2em] mb-3">PAYLOAD</label>
-<textarea class="param-input resize-none h-32" name="message" placeholder="DESCRIBE_YOUR_REQUEST..."></textarea>
+<label class="block text-[9px] font-mono text-secondary uppercase tracking-[0.2em] mb-3" for="contact-message">PAYLOAD <span class="sr-only">(your message)</span></label>
+<textarea class="param-input resize-none h-32" id="contact-message" maxlength="5000" name="message" placeholder="DESCRIBE_YOUR_REQUEST..." required=""></textarea>
 </div>
-<div class="flex items-center justify-between pt-4">
+<div class="flex flex-wrap items-center justify-between gap-4 pt-4">
 <div class="text-[9px] font-mono text-secondary uppercase tracking-widest">ENCRYPTION: TLS_1.3</div>
 <button class="bg-primary-container text-on-primary-container px-8 py-4 font-headline font-bold uppercase tracking-wider text-sm active:translate-y-1 transition-transform hover:bg-primary hover:text-on-primary" type="submit">
                                 TRANSMIT_SIGNAL
