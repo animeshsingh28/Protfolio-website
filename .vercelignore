@@ -1,8 +1,11 @@
 # Allowlist: deploy only the site and its function. Everything else in the
-# repo (sources, docs, agent config, the resume PDF) stays private.
+# repo (sources, docs, agent config, tailwind.config.js, the resume PDF)
+# stays private.
 /*
 !index.html
 !css
+# Tailwind input; the page loads the compiled css/site.css.
+/css/design-tokens.css
 !js
 !favicon.png
 !api

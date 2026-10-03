@@ -5,11 +5,13 @@ Data Engineer portfolio website built as a modular static source with a generate
 ## Project Structure
 
 - `index.html`: Generated deployable output. Do not edit this directly for normal content/style updates.
-- `src/index.template.html`: Page shell (head, Tailwind config, section placeholders).
+- `src/index.template.html`: Page shell (head, stylesheet link, section placeholders).
 - `sections/*.html`: Top-level content fragments.
-- `css/design-tokens.css`: Shared custom CSS atoms (`.blueprint-grid`, `.param-input`, selection, icon settings).
+- `tailwind.config.js`: Tailwind v3.4 config (color tokens, fonts, zeroed radius scale, content globs).
+- `css/design-tokens.css`: Tailwind input: `@tailwind` directives, `:root` tokens, and shared custom CSS atoms (`.blueprint-grid`, `.param-input`, selection).
+- `css/site.css`: Generated, minified stylesheet the page loads. Do not edit it directly.
 - `js/form-handler.js`: Shared client-side form behavior.
-- `scripts/build_site.py`: Build script that assembles template + section fragments into `index.html`.
+- `scripts/build_site.py`: Build script that compiles `css/site.css` with Tailwind, then assembles template + section fragments into `index.html`.
 
 ## Section Source Files
 
@@ -31,12 +33,13 @@ Edit one or more of:
 
 - `src/index.template.html`
 - `sections/*.html`
+- `tailwind.config.js`
 - `css/design-tokens.css`
 - `js/form-handler.js`
 
 ### 2) Rebuild generated output
 
-Run:
+Requires Python 3 and Node.js with npm (the build runs a pinned `npx --yes tailwindcss@3.4.17`; there is no `package.json`, and the first run downloads the CLI into the npm cache). Run:
 
 ```powershell
 python scripts/build_site.py
@@ -50,7 +53,7 @@ If you are using the workspace virtual environment, run:
 
 ### 3) Verify
 
-- Confirm `index.html` was regenerated.
+- Confirm `css/site.css` and `index.html` were regenerated, and commit both (Vercel serves the committed files as-is).
 - Serve the repo root (the page uses absolute paths like `/favicon.png`, so `file://` won't work), then check the changed sections at `http://localhost:8765`:
 
 ```powershell
@@ -69,15 +72,15 @@ See `DESIGN.md` and `.github` instructions for full project conventions.
 
 ## Notes
 
-- Tailwind is loaded via CDN in the template.
-- Root `index.html` is generated from source and should be treated as build output.
+- Tailwind is compiled at build time into `css/site.css`; the page loads no Tailwind script.
+- Root `index.html` and `css/site.css` are generated from source and should be treated as build output.
 
 ## Deployment (Vercel)
 
 The site is a Git-connected Vercel project: pushing to `main` deploys production, and every other branch gets a preview deployment (behind Vercel login). There is no build step on Vercel; the committed `index.html` is served as-is.
 
-- `.vercelignore` is an allowlist: only `index.html`, `css/`, `js/`, `favicon.png`, `api/`, `requirements.txt`, and `vercel.json` are deployed. Sources, docs, and the resume PDF stay private. Allow any new runtime file there.
-- `vercel.json` sets `cleanUrls`, security headers, and the function's `maxDuration`.
+- `.vercelignore` is an allowlist: only `index.html`, `css/` (except the Tailwind input `css/design-tokens.css`), `js/`, `favicon.png`, `api/`, `requirements.txt`, and `vercel.json` are deployed. Sources (including `tailwind.config.js`), docs, and the resume PDF stay private. Allow any new runtime file there.
+- `vercel.json` sets `cleanUrls`, security headers (including a strict Content-Security-Policy), and the function's `maxDuration`. The CSP allows only same-origin scripts, styles, and fetches, plus Google Fonts (`fonts.googleapis.com` styles, `fonts.gstatic.com` fonts) and `lh3.googleusercontent.com` images. Inline scripts, `<style>` blocks, and `style=` attributes are blocked; add any new external host to the policy.
 
 ## Contact Backend (Vercel Function)
 
