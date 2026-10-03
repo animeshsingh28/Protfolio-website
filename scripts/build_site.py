@@ -21,6 +21,9 @@ SECTION_ORDER = [
 # Tailwind is compiled with a pinned CLI fetched by npx (Node.js required);
 # there is no package.json. Change the version here only, and rebuild.
 TAILWIND_VERSION = "3.4.17"
+# Autoprefixer target, set explicitly so a BROWSERSLIST env var or a
+# browserslist config in a parent directory can't change the output.
+BROWSERSLIST_QUERY = "defaults"
 TAILWIND_CONFIG = ROOT / "tailwind.config.js"
 CSS_INPUT = ROOT / "css" / "design-tokens.css"
 CSS_OUTPUT = ROOT / "css" / "site.css"
@@ -41,15 +44,27 @@ def build_css() -> None:
     command = [
         npx,
         "--yes",
+        # Use the cached CLI without a registry round-trip, so a warm cache
+        # builds offline; the exact version pin keeps this safe.
+        "--prefer-offline",
         f"tailwindcss@{TAILWIND_VERSION}",
         "--config", str(TAILWIND_CONFIG.relative_to(ROOT)),
         "--input", str(CSS_INPUT.relative_to(ROOT)),
         "--output", str(CSS_OUTPUT.relative_to(ROOT)),
         "--minify",
     ]
-    # The CLI bundles its own autoprefixer/caniuse data, so the output is fixed
-    # by TAILWIND_VERSION; silence the "caniuse-lite is outdated" nag about it.
-    env = {**os.environ, "BROWSERSLIST_IGNORE_OLD_DATA": "1"}
+    # The CLI bundles its own autoprefixer/caniuse data, but which browsers it
+    # targets comes from the environment (BROWSERSLIST, .browserslistrc or a
+    # package.json "browserslist" key in any parent directory). Pin the query
+    # so the output depends only on TAILWIND_VERSION and the sources, and
+    # silence the "caniuse-lite is outdated" nag about the bundled data.
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if key not in ("BROWSERSLIST_CONFIG", "BROWSERSLIST_ENV")
+    }
+    env["BROWSERSLIST"] = BROWSERSLIST_QUERY
+    env["BROWSERSLIST_IGNORE_OLD_DATA"] = "1"
     try:
         # cwd=ROOT so the config's relative content globs resolve to the repo.
         subprocess.run(command, cwd=ROOT, env=env, check=True)
