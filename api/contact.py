@@ -11,20 +11,32 @@ Environment (set in the Vercel project):
   CONTACT_MAIL_TO   Where notifications go
   CONTACT_MAIL_FROM Sender, on a domain verified in Resend,
                     e.g. "Hornsloth Portfolio <contact@hornsloth.com>"
+  CONTACT_IP_HASH_SECRET
+                    Key for the HMAC-SHA256 of the visitor IP used for rate
+                    limiting (mark it Sensitive). If unset, a plain SHA-256 is
+                    used and a warning is logged once per function instance.
+                    Changing it resets every rate-limit window once.
+
+Only application/json bodies are processed; nothing else reaches validation or
+the database. A no-JS / failed-JS browser submit (a navigation, i.e.
+Sec-Fetch-Mode: navigate or Accept containing text/html, with a urlencoded,
+multipart, or empty content type) gets a 400 HTML page saying the message was
+not sent, with an email link. Every other non-JSON request is a 415 JSON error.
 """
 
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
 import re
 import secrets
+import threading
 import time
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler
-from urllib.parse import parse_qs
 
 import psycopg
 
@@ -81,9 +93,43 @@ def header_safe(value: str) -> str:
     return value.replace("\r", " ").replace("\n", " ").strip()
 
 
+FORM_CONTENT_TYPES = ("application/x-www-form-urlencoded", "multipart/form-data")
+
+# Shown when the native form submit reaches the API (JS off, or form-handler.js
+# failed to load or threw). Plain HTML: no inline styles or scripts.
+NO_JS_PAGE = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Message not sent</title>
+</head>
+<body>
+<main>
+<h1>Your message was not sent</h1>
+<p>The contact form needs JavaScript, which did not run in your browser, so nothing was delivered.</p>
+<p>Please email me instead at <a href="mailto:animeshsingh5770@gmail.com">animeshsingh5770@gmail.com</a>.</p>
+<p><a href="/#contact">Back to the contact section</a></p>
+</main>
+</body>
+</html>
+""".encode("utf-8")
+
+
+def is_browser_navigation(sec_fetch_mode: str, accept: str) -> bool:
+    # A native form submit is a top-level navigation; fetch() and API clients
+    # (curl, urllib, Invoke-RestMethod) are not and don't ask for HTML.
+    return sec_fetch_mode.strip().lower() == "navigate" or "text/html" in accept.lower()
+
+
+def is_form_submit(content_type: str) -> bool:
+    # What a browser sends for the plain HTML form (no enctype -> urlencoded).
+    content_type = content_type.strip().lower()
+    return content_type == "" or any(kind in content_type for kind in FORM_CONTENT_TYPES)
+
+
 def parse_body(content_type: str, raw: bytes) -> dict:
-    content_type = content_type.lower()
-    if "application/json" in content_type:
+    if "application/json" in content_type.lower():
         try:
             data = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, ValueError):
@@ -91,11 +137,31 @@ def parse_body(content_type: str, raw: bytes) -> dict:
         if not isinstance(data, dict):
             raise ApiError(400, "Invalid JSON payload")
         return data
-    # A no-JS form submit arrives urlencoded.
-    if "application/x-www-form-urlencoded" in content_type or content_type == "":
-        parsed = parse_qs(raw.decode("utf-8", errors="replace"), keep_blank_values=True)
-        return {key: values[0] for key, values in parsed.items()}
     raise ApiError(415, "Unsupported payload type")
+
+
+_ip_secret_warned = False
+_ip_secret_warned_lock = threading.Lock()
+
+
+def warn_ip_secret_missing_once() -> None:
+    # Once per process, not per request, so the logs stay readable.
+    global _ip_secret_warned
+    with _ip_secret_warned_lock:
+        if _ip_secret_warned:
+            return
+        _ip_secret_warned = True
+    log("CONTACT_IP_HASH_SECRET is not set; using unkeyed SHA-256 for the IP hash")
+
+
+def hash_ip(ip: str) -> str:
+    # Keyed, so the stored hash can't be reversed by hashing every IPv4 address.
+    secret = (os.environ.get("CONTACT_IP_HASH_SECRET") or "").strip()
+    if secret:
+        return hmac.new(secret.encode("utf-8"), ip.encode("utf-8"), hashlib.sha256).hexdigest()
+    # A privacy setting must not take the form down: fall back, but say so.
+    warn_ip_secret_missing_once()
+    return hashlib.sha256(ip.encode("utf-8")).hexdigest()
 
 
 def validate(data: dict) -> dict:
@@ -211,7 +277,7 @@ def mail_timeout(started: float) -> float | None:
 
 def handle_submission(fields: dict, ip: str, user_agent: str, started: float) -> dict:
     request_id = secrets.token_hex(16)
-    ip_hash = hashlib.sha256(ip.encode("utf-8")).hexdigest()
+    ip_hash = hash_ip(ip)
 
     # autocommit outside the transaction block: the row must be committed
     # before the email goes out.
@@ -271,6 +337,16 @@ class handler(BaseHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(body)
 
+    def respond_no_js_page(self) -> None:
+        # 400, not a redirect: the visitor must see that nothing was sent.
+        body = NO_JS_PAGE
+        self.send_response(400)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def method_not_allowed(self) -> None:
         self.respond(405, {"success": False, "message": "Method not allowed"})
 
@@ -292,7 +368,17 @@ class handler(BaseHTTPRequestHandler):
             if length < 0 or length > MAX_BODY_BYTES:
                 raise ApiError(413, "Payload too large")
 
-            data = parse_body(self.headers.get("Content-Type") or "", self.rfile.read(length))
+            content_type = self.headers.get("Content-Type") or ""
+            raw = self.rfile.read(length)
+            if is_form_submit(content_type) and is_browser_navigation(
+                self.headers.get("Sec-Fetch-Mode") or "", self.headers.get("Accept") or ""
+            ):
+                # Without JS there is no fill-time value, so the submit can't
+                # pass the bot checks; store nothing and tell the visitor so.
+                self.respond_no_js_page()
+                return
+            # Anything that isn't JSON (API clients included) is a 415 here.
+            data = parse_body(content_type, raw)
             fields = validate(data)
             user_agent = clean_text((self.headers.get("User-Agent") or "")[:255])
             self.respond(200, handle_submission(fields, self.client_ip(), user_agent, started))
