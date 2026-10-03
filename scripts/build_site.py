@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE_PATH = ROOT / "src" / "index.template.html"
 OUTPUT_PATH = ROOT / "index.html"
-# Standalone page Vercel serves for unknown paths; copied as-is.
+# Standalone page Vercel serves for unknown paths (partials applied).
 NOT_FOUND_SOURCE = ROOT / "src" / "404.html"
 NOT_FOUND_OUTPUT = ROOT / "404.html"
 # Canonical origin, matching the template's canonical/og:url/JSON-LD URLs.
@@ -15,6 +16,10 @@ SITE_URL = "https://hornsloth.com/"
 ROBOTS_OUTPUT = ROOT / "robots.txt"
 SITEMAP_OUTPUT = ROOT / "sitemap.xml"
 SECTION_DIR = ROOT / "sections"
+# Shared <head> snippets: <!-- PARTIAL:<name> --> -> src/partials/<name>.html,
+# so the page and the 404 page can't drift apart (e.g. font weights).
+PARTIAL_DIR = ROOT / "src" / "partials"
+PARTIAL_RE = re.compile(r"<!-- PARTIAL:([a-z0-9-]+) -->")
 SECTION_ORDER = [
     ("header-nav", "header-nav.html"),
     ("hero", "hero.html"),
@@ -88,8 +93,12 @@ def build_css() -> None:
         raise SystemExit(f"Tailwind build produced no output at {CSS_OUTPUT}")
 
 
+def apply_partials(html: str) -> str:
+    return PARTIAL_RE.sub(lambda match: read_text(PARTIAL_DIR / f"{match.group(1)}.html").rstrip(), html)
+
+
 def build_html() -> None:
-    html = read_text(TEMPLATE_PATH)
+    html = apply_partials(read_text(TEMPLATE_PATH))
 
     for marker, filename in SECTION_ORDER:
         placeholder = f"<!-- SECTION:{marker} -->"
@@ -102,7 +111,7 @@ def build_html() -> None:
 
 
 def build_not_found() -> None:
-    html = read_text(NOT_FOUND_SOURCE)
+    html = apply_partials(read_text(NOT_FOUND_SOURCE))
     NOT_FOUND_OUTPUT.write_text(f"{html.rstrip()}\n", encoding="utf-8")
 
 

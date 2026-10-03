@@ -10,4 +10,4 @@ applyTo: "css/design-tokens.css"
 - Do not introduce rounded corners or border-radius values that conflict with the zero-radius design rule.
 - Prefer existing Tailwind tokens and design-system values when adding new CSS declarations.
 - Avoid component-specific layout styling here when the same change belongs in a section fragment.
-- After any change, run `python scripts/build_site.py` (regenerates `css/site.css` and `index.html`; needs Node.js for `npx`) and commit both outputs.
+- After any change, run `python scripts/build_site.py` (regenerates `css/site.css`, `index.html`, and the other build outputs; needs Node.js for `npx`) and commit every regenerated file.

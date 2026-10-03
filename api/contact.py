@@ -32,7 +32,6 @@ import json
 import os
 import re
 import secrets
-import threading
 import time
 import urllib.error
 import urllib.request
@@ -96,7 +95,10 @@ def header_safe(value: str) -> str:
 FORM_CONTENT_TYPES = ("application/x-www-form-urlencoded", "multipart/form-data")
 
 # Shown when the native form submit reaches the API (JS off, or form-handler.js
-# failed to load or threw). Plain HTML: no inline styles or scripts.
+# failed to load or threw). Plain HTML: no inline styles or scripts. It points
+# to the Back button rather than linking to /#contact: a fresh page load would
+# empty the form, while Back restores the visitor's text so they can copy it.
+# The email address also appears in sections/contact.html; change both together.
 NO_JS_PAGE = """<!doctype html>
 <html lang="en">
 <head>
@@ -109,7 +111,7 @@ NO_JS_PAGE = """<!doctype html>
 <h1>Your message was not sent</h1>
 <p>The contact form needs JavaScript, which did not run in your browser, so nothing was delivered.</p>
 <p>Please email me instead at <a href="mailto:animeshsingh5770@gmail.com">animeshsingh5770@gmail.com</a>.</p>
-<p><a href="/#contact">Back to the contact section</a></p>
+<p>Your text is not lost: use your browser's Back button to return to the form, copy your message, and paste it into an email.</p>
 </main>
 </body>
 </html>
@@ -141,17 +143,15 @@ def parse_body(content_type: str, raw: bytes) -> dict:
 
 
 _ip_secret_warned = False
-_ip_secret_warned_lock = threading.Lock()
 
 
 def warn_ip_secret_missing_once() -> None:
-    # Once per process, not per request, so the logs stay readable.
+    # Once per process, not per request, so the logs stay readable. No lock:
+    # at worst two concurrent requests log the line twice.
     global _ip_secret_warned
-    with _ip_secret_warned_lock:
-        if _ip_secret_warned:
-            return
+    if not _ip_secret_warned:
         _ip_secret_warned = True
-    log("CONTACT_IP_HASH_SECRET is not set; using unkeyed SHA-256 for the IP hash")
+        log("CONTACT_IP_HASH_SECRET is not set; using unkeyed SHA-256 for the IP hash")
 
 
 def hash_ip(ip: str) -> str:
@@ -365,16 +365,22 @@ class handler(BaseHTTPRequestHandler):
                 length = int(self.headers.get("Content-Length") or 0)
             except ValueError:
                 length = -1
+            content_type = self.headers.get("Content-Type") or ""
+            # Without JS there is no fill-time value, so a native form submit
+            # can't pass the bot checks; store nothing and tell the visitor so.
+            # Decided before the size check, so an oversized native submit also
+            # gets the readable page rather than a bare JSON 413.
+            native_submit = is_form_submit(content_type) and is_browser_navigation(
+                self.headers.get("Sec-Fetch-Mode") or "", self.headers.get("Accept") or ""
+            )
             if length < 0 or length > MAX_BODY_BYTES:
+                if native_submit:
+                    self.respond_no_js_page()
+                    return
                 raise ApiError(413, "Payload too large")
 
-            content_type = self.headers.get("Content-Type") or ""
             raw = self.rfile.read(length)
-            if is_form_submit(content_type) and is_browser_navigation(
-                self.headers.get("Sec-Fetch-Mode") or "", self.headers.get("Accept") or ""
-            ):
-                # Without JS there is no fill-time value, so the submit can't
-                # pass the bot checks; store nothing and tell the visitor so.
+            if native_submit:
                 self.respond_no_js_page()
                 return
             # Anything that isn't JSON (API clients included) is a 415 here.

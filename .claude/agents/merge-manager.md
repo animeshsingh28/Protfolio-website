@@ -45,7 +45,7 @@ Read `CLAUDE.md` first. Its build, editing-scope, and design-system rules apply 
    - Navigation: every `href="#id"` in `sections/header-nav.html` points at an id that still exists.
 
 6. **Verify.**
-   - `python scripts/build_site.py`, stage the regenerated `index.html` and `css/site.css`, then build again: the second build must leave no diff.
+   - `python scripts/build_site.py`, stage every regenerated output (`index.html`, `css/site.css`, `404.html`, `robots.txt`, `sitemap.xml`), then build again: the second build must leave no diff.
    - Serve the repo root with `python -m http.server 8765` in the background (not `file://`; the page uses absolute paths). If browser tools are available, open `http://localhost:8765`, check the console for errors, and look at every section either side touched. Otherwise request the page and confirm it returns 200 and contains every section marker comment. Stop the server when done.
 
 7. **Commit and push.** Commit the merge with a message listing each conflicted file and how it was resolved, then `git push` to the PR branch.
