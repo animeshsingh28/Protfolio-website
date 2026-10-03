@@ -1,6 +1,5 @@
-# Local secret overrides
-api/config.local.php
-api/*.local.php
+# Local secrets (vercel env pull) and Vercel CLI link state
+.vercel
 .env
 .env.*
 !.env.example

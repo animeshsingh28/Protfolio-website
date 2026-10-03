@@ -39,7 +39,8 @@ Read `CLAUDE.md` first. Its build, editing-scope, and design-system rules apply 
 5. **Hunt hidden conflicts**, meaning changes that merge cleanly but break each other. Compare the merged result with each side and check:
    - Color tokens in the inline `tailwind.config` (`src/index.template.html`) and custom properties in `css/design-tokens.css`: every name either side renamed or removed must have no remaining uses in `sections/`, `src/`, `css/`, or `js/`.
    - The var-based token gotcha in `CLAUDE.md`: if one side moved a token from hex to `var(--token-*)`, opacity modifiers like `border-<token>/10` on the other side silently stop working.
-   - Contact form contract: field names and element ids match across `sections/contact.html`, `js/form-handler.js`, and `api/contact.php`; length limits in `contact.php` match `api/schema.sql`.
+   - Contact form contract: field names and element ids match across `sections/contact.html`, `js/form-handler.js`, and `api/contact.py`; `MAX_LENGTHS` in `contact.py` match `db/schema.sql` and the inputs' `maxlength`.
+   - Deploy allowlist: any new file the site or function needs at runtime is allowed in `.vercelignore`.
    - Section wiring: every `<!-- SECTION:name -->` placeholder has a `SECTION_ORDER` entry in `scripts/build_site.py` and a fragment; each fragment starts with its marker comment; the fragment lists in `.github/instructions/section-fragments.instructions.md` and `.github/prompts/*.prompt.md` agree.
    - Navigation: every `href="#id"` in `sections/header-nav.html` points at an id that still exists.
 

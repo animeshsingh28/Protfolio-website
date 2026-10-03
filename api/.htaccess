@@ -1,9 +1,0 @@
-# Only the contact endpoint is public. Everything else in api/ (config,
-# helpers, schema, and the error_log file cPanel's PHP writes here by
-# default) must not be downloadable. Later sections override earlier ones.
-<FilesMatch ".*">
-    Require all denied
-</FilesMatch>
-<Files "contact.php">
-    Require all granted
-</Files>

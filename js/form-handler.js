@@ -9,11 +9,10 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
     }
 
-    // Generous, because the server saves the message before sending the email
-    // and mail() can block for a long time. This is not a hard bound on server
-    // time (PHP's max_execution_time excludes time blocked in I/O), so a
+    // Above the function's maxDuration (20s in vercel.json), plus cold-start
+    // margin. The server saves the message before sending the email, so a
     // timeout is reported as "may have been sent" rather than as a failure.
-    const REQUEST_TIMEOUT_MS = 45000;
+    const REQUEST_TIMEOUT_MS = 25000;
     const FALLBACK_ERROR = "Transmission failed. Please try again or email me directly.";
     const UNCERTAIN_ERROR = "No reply from the server. Your message may have been sent, so please check with me before resending.";
 
@@ -108,7 +107,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         let receivedHeaders = false;
         try {
-            const response = await fetch("/api/contact.php", {
+            const response = await fetch("/api/contact", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

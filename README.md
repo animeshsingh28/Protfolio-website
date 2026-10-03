@@ -72,50 +72,57 @@ See `DESIGN.md` and `.github` instructions for full project conventions.
 - Tailwind is loaded via CDN in the template.
 - Root `index.html` is generated from source and should be treated as build output.
 
-## Contact Backend (Namecheap)
+## Deployment (Vercel)
 
-The contact form posts to `api/contact.php` and supports database persistence plus email notification.
+The site is a Git-connected Vercel project: pushing to `main` deploys production, and every other branch gets a preview deployment (behind Vercel login). There is no build step on Vercel; the committed `index.html` is served as-is.
+
+- `.vercelignore` is an allowlist: only `index.html`, `css/`, `js/`, `favicon.png`, `api/`, `requirements.txt`, and `vercel.json` are deployed. Sources, docs, and the resume PDF stay private. Allow any new runtime file there.
+- `vercel.json` sets `cleanUrls`, security headers, and the function's `maxDuration`.
+
+## Contact Backend (Vercel Function)
+
+The contact form posts to `/api/contact`, a Python Vercel Function (`api/contact.py`) that stores each submission in Postgres and sends a notification email through Resend.
 
 ### Backend files
 
-- `api/contact.php`
-- `api/config.php`
-- `api/db.php`
-- `api/mailer.php`
-- `api/schema.sql`
+- `api/contact.py`: the endpoint
+- `requirements.txt`: function dependencies (`psycopg`)
+- `db/schema.sql`: Postgres table definition
 
-### cPanel setup
+### One-time setup
 
-1. Create a MySQL database and user in cPanel.
-2. Import `api/schema.sql` using phpMyAdmin.
-3. Upload the `api/` folder to your web root.
-4. Keep `api/config.php` as a git-safe template and create `api/config.local.php` on the server with real DB/SMTP credentials.
-5. Verify `api/contact.php` is reachable on your domain.
+1. **Database:** in the Vercel dashboard, open the project's **Storage** tab and add **Neon** (Postgres) from the Marketplace, connected to all environments. Pick the US East (`us-east-1`) region so it sits next to the function (`iad1`). This injects `DATABASE_URL`.
+2. **Schema:** open the Neon SQL editor (from the Storage tab) and run `db/schema.sql`.
+3. **Email:** create a Resend account, verify your sending domain (`hornsloth.com`), and create an API key.
+4. **Environment variables** (Project → Settings → Environment Variables, all environments):
+   - `RESEND_API_KEY`: the Resend key (mark it Sensitive)
+   - `CONTACT_MAIL_TO`: where notifications go
+   - `CONTACT_MAIL_FROM`: e.g. `Hornsloth Portfolio <contact@hornsloth.com>` (must be on the verified domain)
+5. Redeploy so the function picks up the variables.
 
 ### Secrets management
 
-- `api/config.php` is committed and safe for git (placeholders + optional env vars).
-- Real credentials belong in `api/config.local.php` on the server.
-- Use `api/config.local.php.example` as the template for your server-local config.
-- Never commit `api/config.local.php` to git.
+- All secrets live in Vercel environment variables; nothing secret is committed.
+- For local `vercel dev`, `vercel env pull .env.local` writes them to a gitignored file.
 
 ### API behavior
 
-- Method: `POST` only
-- Content types: `application/json`, `application/x-www-form-urlencoded`, `multipart/form-data`
+- Method: `POST` only (anything else is 405)
+- Content types: `application/json`, `application/x-www-form-urlencoded` (the no-JS form fallback)
 - Required fields: `name`, `email`, `subject`, `message`
-- Abuse controls: honeypot (`company_website`) and fill-time (`form_started_at`) checks
+- Abuse controls: honeypot (`company_website`), fill-time (`form_started_at`), and 5 requests per 5 minutes per hashed IP
+- Once a submission is stored the response is success even if the email fails; check the Vercel runtime logs and rows with `status = 'email_failed'`
 
 ### Frontend hook
 
-- `js/form-handler.js` sends payload to `/api/contact.php`
+- `js/form-handler.js` sends payload to `/api/contact`
 - Submit button is disabled during request
 - Inline status updates are rendered in `#contact-form-status`
 
 ### Quick smoke test (PowerShell)
 
 ```powershell
-$u = "https://YOURDOMAIN.com/api/contact.php"
+$u = "https://hornsloth.com/api/contact"
 $ok = @{
 	name = "Integration Test"
 	email = "you@example.com"

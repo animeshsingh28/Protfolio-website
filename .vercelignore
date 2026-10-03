@@ -1,0 +1,10 @@
+# Allowlist: deploy only the site and its function. Everything else in the
+# repo (sources, docs, agent config, the resume PDF) stays private.
+/*
+!index.html
+!css
+!js
+!favicon.png
+!api
+!requirements.txt
+!vercel.json
