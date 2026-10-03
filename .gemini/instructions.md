@@ -170,7 +170,7 @@ Always use named Tailwind tokens — never raw hex. Key tokens:
 ### Security Layers
 
 1. **Honeypot:** Hidden `company_website` field must be empty.
-2. **Fill-time check:** `now - form_started_at ≥ 3 seconds`.
+2. **Fill-time check:** client-measured `form_fill_seconds ≥ 3`.
 3. **Rate limit:** Max 5 requests per 300 seconds per IP hash.
 4. **Input validation:** Required fields, length limits, email validation.
 5. **IP hashing:** SHA-256 hash stored, never raw IP.
@@ -187,7 +187,8 @@ Always use named Tailwind tokens — never raw hex. Key tokens:
 
 ## 7. Frontend Contact Form (`js/form-handler.js`)
 
-- On page load: sets `form_started_at` to Unix epoch seconds.
+- On page load: stores the start time (ms) in hidden `form_started_at`; on
+  submit it sends the elapsed `form_fill_seconds`, never the timestamp.
 - On submit: collects JSON payload → `POST /api/contact`.
 - Status updates rendered in `#contact-form-status` (`aria-live="polite"`).
 - Status codes: `TRANSMITTING...` → `MESSAGE_ACCEPTED` (success, tertiary)

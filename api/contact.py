@@ -32,8 +32,11 @@ MIN_FILL_SECONDS = 3
 RATE_LIMIT_WINDOW_SECONDS = 300
 RATE_LIMIT_MAX_REQUESTS = 5
 MAX_BODY_BYTES = 64 * 1024
+# Keep the worst case well under maxDuration (20s in vercel.json): a killed
+# invocation after the INSERT leaves the visitor unsure whether it was sent.
+# urlopen applies its timeout to the connect and to each read separately.
 DB_CONNECT_TIMEOUT_SECONDS = 5
-MAIL_TIMEOUT_SECONDS = 8
+MAIL_TIMEOUT_SECONDS = 4
 
 # Mirror the column sizes in db/schema.sql and the inputs' maxlength in
 # sections/contact.html; change all three together.
@@ -42,9 +45,15 @@ MAX_LENGTHS = {"name": 100, "email": 254, "subject": 150, "message": 5000}
 RESEND_URL = "https://api.resend.com/emails"
 SUCCESS_MESSAGE = "Message received. I will get back to you soon."
 
-EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# The WHATWG rule browsers use for <input type="email">, so the server accepts
+# exactly what the form's client-side validation does, plus a dotted domain.
+EMAIL_RE = re.compile(
+    r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+"
+    r"@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+    r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+\Z"
+)
 CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]")
-LINE_BREAK_RE = re.compile(r"\r\n|\r| | |\x85")
+LINE_BREAK_RE = re.compile(r"\r\n|\r|\u2028|\u2029|\x85")
 
 
 class ApiError(Exception):
@@ -91,11 +100,13 @@ def validate(data: dict) -> dict:
     if clean_text(data.get("company_website")):
         raise ApiError(429, "blocked_honeypot")
 
+    # Elapsed time is measured on the client, so the visitor's clock being off
+    # from the server's can't block (or pass) a submission.
     try:
-        started_at = int(str(data.get("form_started_at") or "0").strip())
+        fill_seconds = float(str(data.get("form_fill_seconds") or "0").strip())
     except ValueError:
-        started_at = 0
-    if started_at <= 0 or time.time() - started_at < MIN_FILL_SECONDS:
+        fill_seconds = 0
+    if not fill_seconds >= MIN_FILL_SECONDS:
         raise ApiError(429, "blocked_fill_time")
 
     if any(value == "" for value in fields.values()):
@@ -188,32 +199,38 @@ def handle_submission(fields: dict, ip: str, user_agent: str) -> dict:
     request_id = secrets.token_hex(16)
     ip_hash = hashlib.sha256(ip.encode("utf-8")).hexdigest()
 
-    # autocommit: the row must be durable before the email goes out.
+    # autocommit outside the transaction block: the row must be committed
+    # before the email goes out.
     with psycopg.connect(
         database_url(), autocommit=True, connect_timeout=DB_CONNECT_TIMEOUT_SECONDS
     ) as conn:
-        recent = conn.execute(
-            "SELECT count(*) FROM contact_submissions"
-            " WHERE ip_hash = %s AND created_at >= now() - %s * interval '1 second'",
-            (ip_hash, RATE_LIMIT_WINDOW_SECONDS),
-        ).fetchone()[0]
-        if recent >= RATE_LIMIT_MAX_REQUESTS:
-            raise ApiError(429, "Too many requests. Please try again later.")
+        with conn.transaction():
+            # Serialize count-then-insert per IP, so a parallel burst can't
+            # all see the same count. Transaction-scoped, so it is safe
+            # behind Neon's transaction-mode pooler.
+            conn.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (ip_hash,))
+            recent = conn.execute(
+                "SELECT count(*) FROM contact_submissions"
+                " WHERE ip_hash = %s AND created_at >= now() - %s * interval '1 second'",
+                (ip_hash, RATE_LIMIT_WINDOW_SECONDS),
+            ).fetchone()[0]
+            if recent >= RATE_LIMIT_MAX_REQUESTS:
+                raise ApiError(429, "Too many requests. Please try again later.")
 
-        conn.execute(
-            "INSERT INTO contact_submissions"
-            " (request_id, name, email, subject, message, ip_hash, user_agent, status)"
-            " VALUES (%s, %s, %s, %s, %s, %s, %s, 'received')",
-            (
-                request_id,
-                fields["name"],
-                fields["email"],
-                fields["subject"],
-                fields["message"],
-                ip_hash,
-                user_agent,
-            ),
-        )
+            conn.execute(
+                "INSERT INTO contact_submissions"
+                " (request_id, name, email, subject, message, ip_hash, user_agent, status)"
+                " VALUES (%s, %s, %s, %s, %s, %s, %s, 'received')",
+                (
+                    request_id,
+                    fields["name"],
+                    fields["email"],
+                    fields["subject"],
+                    fields["message"],
+                    ip_hash,
+                    user_agent,
+                ),
+            )
 
         if send_mail(fields, request_id):
             update_status_best_effort(conn, request_id, "emailed")
@@ -234,12 +251,13 @@ class handler(BaseHTTPRequestHandler):
         if status == 405:
             self.send_header("Allow", "POST")
         self.end_headers()
-        self.wfile.write(body)
+        if self.command != "HEAD":
+            self.wfile.write(body)
 
     def method_not_allowed(self) -> None:
         self.respond(405, {"success": False, "message": "Method not allowed"})
 
-    do_GET = do_PUT = do_PATCH = do_DELETE = method_not_allowed
+    do_GET = do_HEAD = do_OPTIONS = do_PUT = do_PATCH = do_DELETE = method_not_allowed
 
     def client_ip(self) -> str:
         # Vercel sets x-real-ip / x-forwarded-for itself and overwrites any

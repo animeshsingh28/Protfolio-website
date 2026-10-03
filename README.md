@@ -110,7 +110,7 @@ The contact form posts to `/api/contact`, a Python Vercel Function (`api/contact
 - Method: `POST` only (anything else is 405)
 - Content types: `application/json`, `application/x-www-form-urlencoded` (the no-JS form fallback)
 - Required fields: `name`, `email`, `subject`, `message`
-- Abuse controls: honeypot (`company_website`), fill-time (`form_started_at`), and 5 requests per 5 minutes per hashed IP
+- Abuse controls: honeypot (`company_website`), fill-time (`form_fill_seconds`), and 5 requests per 5 minutes per hashed IP
 - Once a submission is stored the response is success even if the email fails; check the Vercel runtime logs and rows with `status = 'email_failed'`
 
 ### Frontend hook
@@ -121,6 +121,8 @@ The contact form posts to `/api/contact`, a Python Vercel Function (`api/contact
 
 ### Quick smoke test (PowerShell)
 
+Use the production domain. Until `hornsloth.com` points at Vercel it still reaches the old cPanel host, so use `https://protfolio-website-gray-theta.vercel.app` meanwhile. Preview deployments sit behind Vercel login; test those through the form in a signed-in browser.
+
 ```powershell
 $u = "https://hornsloth.com/api/contact"
 $ok = @{
@@ -129,7 +131,7 @@ $ok = @{
 	subject = "Contact API test"
 	message = "Testing from PowerShell"
 	company_website = ""
-	form_started_at = [string]([int](Get-Date -UFormat %s) - 10)
+	form_fill_seconds = 10
 } | ConvertTo-Json
 
 Invoke-RestMethod -Uri $u -Method Post -ContentType "application/json" -Body $ok
