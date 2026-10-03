@@ -46,10 +46,12 @@ RATE_LIMIT_MAX_REQUESTS = 5
 MAX_BODY_BYTES = 64 * 1024
 # Keep the worst case well under maxDuration (20s in vercel.json): a killed
 # invocation after the INSERT leaves the visitor unsure whether it was sent.
-# Worst case: connect (5s) + the insert transaction (each statement capped at
-# DB_STATEMENT_TIMEOUT_MS) + the mail call, which is cut off
-# REQUEST_BUDGET_SECONDS after the request started, + the status update (one
-# more statement cap) = about 16s.
+# With a responsive database: connect (5s) + the insert transaction (slow
+# queries and lock waits capped at DB_STATEMENT_TIMEOUT_MS each) + the mail
+# call, cut off REQUEST_BUDGET_SECONDS after the request started, + the status
+# update (one more cap) = about 16s. statement_timeout is enforced by the
+# server, so it does not bound a pooler queue wait or a stalled connection;
+# those can still run into maxDuration.
 DB_CONNECT_TIMEOUT_SECONDS = 5
 DB_STATEMENT_TIMEOUT_MS = 2000
 MAIL_TIMEOUT_SECONDS = 4
@@ -255,25 +257,36 @@ def send_mail_within(fields: dict, request_id: str, seconds: float) -> bool:
     """send_mail with a hard wall-clock limit. urlopen's timeout covers the
     connect and each read, but not the DNS lookup, so the call runs in a daemon
     thread that is abandoned (counted as failed) when the time is up. An
-    abandoned call can still deliver later; the row then says email_failed."""
-    result: list[bool] = []
-    worker = threading.Thread(
-        target=lambda: result.append(
-            send_mail(fields, request_id, min(MAIL_TIMEOUT_SECONDS, seconds))
-        ),
-        daemon=True,
-    )
+    abandoned call can still deliver later (on Vercel, possibly while a later
+    invocation runs); that is logged, so an email_failed row whose request id
+    has a late-delivery line was in fact notified."""
+    lock = threading.Lock()
+    state = {"sent": None, "abandoned": False}
+
+    def run() -> None:
+        sent = send_mail(fields, request_id, min(MAIL_TIMEOUT_SECONDS, seconds))
+        # Under the lock, so the result and the abandon decision can't cross.
+        with lock:
+            state["sent"] = sent
+            late = state["abandoned"]
+        if late and sent:
+            log(f"late delivery: email for request {request_id} was sent after the call was abandoned; its row says email_failed")
+
+    worker = threading.Thread(target=run, daemon=True)
     worker.start()
     worker.join(seconds)
-    if worker.is_alive():
-        log(f"resend call for request {request_id} ran out of time and was abandoned")
-        return False
-    return bool(result) and result[0]
+    with lock:
+        if state["sent"] is None:
+            state["abandoned"] = True
+            log(f"resend call for request {request_id} ran out of time and was abandoned")
+            return False
+        return state["sent"]
 
 
 def limit_statement_time(conn: psycopg.Connection) -> None:
     # Like SET LOCAL: ends with the transaction, so the setting can't leak to
-    # other clients through Neon's transaction-mode pooler.
+    # other clients through Neon's transaction-mode pooler. Only works inside
+    # an explicit transaction; under autocommit it would end immediately.
     conn.execute(
         "SELECT set_config('statement_timeout', %s, true)", (f"{DB_STATEMENT_TIMEOUT_MS}ms",)
     )
@@ -316,9 +329,9 @@ def handle_submission(fields: dict, ip: str, user_agent: str, started: float) ->
         database_url(), autocommit=True, connect_timeout=DB_CONNECT_TIMEOUT_SECONDS
     ) as conn:
         with conn.transaction():
-            # Covers the lock wait too, so a stalled pooler or a stuck lock
-            # holder fails fast (500, nothing stored) instead of running into
-            # maxDuration.
+            # Covers the lock wait too, so a slow query or a stuck lock holder
+            # fails fast (500, nothing stored) instead of running into
+            # maxDuration. Server-side only: see DB_STATEMENT_TIMEOUT_MS.
             limit_statement_time(conn)
             # Serialize count-then-insert per IP, so a parallel burst can't
             # all see the same count. Transaction-scoped, so it is safe
