@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Static Data Engineer portfolio site with a small PHP contact-form backend, hosted on Namecheap cPanel (MySQL + PHP). No frontend framework, no package manager, no test suite or linter.
+Static Data Engineer portfolio site with a Python contact-form function, hosted on Vercel (project `protfolio-website`, Git-connected: pushes to `main` deploy production, other branches get previews behind Vercel login). Storage is Neon Postgres, email is Resend. No frontend framework, no package manager, no test suite or linter.
 
 ## Commands
 
@@ -14,11 +14,17 @@ python scripts/build_site.py
 
 Regenerates root `index.html` from the template and section fragments. It is stdlib-only Python 3, so any interpreter works (the repo `.venv` is optional). The build is deterministic: rebuilding unchanged sources reproduces the committed `index.html` byte-for-byte.
 
-There is no local backend setup; `api/contact.php` is exercised against the deployed host with the PowerShell smoke test in README.md. `index.html` references `/favicon.png` and `/api/contact.php` by absolute path, so the page must be served from a web root — over `file://` the favicon and form submission break.
+`python -m http.server` previews the static page, but the form needs the function: run `vercel dev` (Vercel CLI, with env vars pulled via `vercel env pull`) or test against a preview deployment with the PowerShell smoke test in README.md. `index.html` references `/favicon.png` and `/api/contact` by absolute path, so the page must be served from a web root — over `file://` the favicon and form submission break.
+
+## Deployment (Vercel)
+
+- No build step on Vercel: the committed `index.html` is served as-is, so always rebuild and commit it.
+- `.vercelignore` is an allowlist (`/*` then `!index.html`, `!css`, `!js`, `!favicon.png`, `!api`, `!requirements.txt`, `!vercel.json`). Everything else — sources, docs, agent config, the resume PDF — is deliberately not deployed. A new file the live site needs must be allowed there, or it 404s in production.
+- `vercel.json`: `cleanUrls`, security headers on every path, and `maxDuration` for `api/contact.py`. Every `.py` file in `api/` becomes a public function, so keep helpers out of `api/`.
 
 ## Build architecture
 
-- `src/index.template.html` is the page shell: `<head>` (title, meta description, canonical, Open Graph tags, and a JSON-LD `Person` block, all using absolute `https://hornsloth.com/` URLs), fonts, Tailwind CDN script, the inline `tailwind.config`, and `<!-- SECTION:<name> -->` placeholders.
+- `src/index.template.html` is the page shell: `<head>` (title, meta description, canonical, Open Graph tags, and a JSON-LD `Person` block, all using absolute `https://hornsloth.com/` URLs), fonts (Google Fonts requests only the weights in use: Inter 400, Space Grotesk 300/400/700 — the family has no 800/900, so `font-extrabold`/`font-black` render at 700 — and JetBrains Mono 400; add a weight there before using a new one), Tailwind CDN script, the inline `tailwind.config`, and `<!-- SECTION:<name> -->` placeholders.
 - `sections/<name>.html` fragments are substituted into those placeholders in the order of `SECTION_ORDER` in `scripts/build_site.py`. `header-nav` and `footer` sit outside `<main class="blueprint-grid">`; all other sections are inside it.
 - Root `index.html` is generated but committed, and is the deployed artifact. Never hand-edit it — edit sources, rebuild, and commit the regenerated `index.html` alongside the source change.
 - Adding a section requires a new fragment, a placeholder in the template, and an entry in `SECTION_ORDER` (the build raises if a placeholder is missing). Also update the fragment lists in `.github/instructions/section-fragments.instructions.md` and `.github/prompts/*.prompt.md`.
@@ -51,14 +57,14 @@ Opacity modifiers (`border-outline-variant/10`, `hover:border-primary-container/
 
 ## Contact form backend (`api/`)
 
-Flow: `js/form-handler.js` POSTs JSON to `/api/contact.php` → validation → rate-limit check and insert into `contact_submissions` (`db.php`, `schema.sql`) → notification via `mailer.php` → row status updated `received` → `emailed` / `email_failed`. Once the row is stored the API returns 200 success even if the email fails (the failure goes to the PHP error log), so visitors don't resend.
+Flow: `js/form-handler.js` POSTs JSON to `/api/contact` (`api/contact.py`, a `BaseHTTPRequestHandler` Vercel Function) → validation → rate-limit check and insert into `contact_submissions` (`db/schema.sql`, Postgres) → notification email via the Resend HTTP API → row status updated `received` → `emailed` / `email_failed`. Once the row is stored the API returns 200 success even if the email or the status update fails (the failure goes to the Vercel runtime logs), so visitors don't resend.
 
-- The JS binds to `#contact form`, its `button[type=submit]`, `#contact-form-status`, and hidden `input[name=form_started_at]`, and silently no-ops if any is missing. Field names (`name`, `email`, `subject`, `message`, honeypot `company_website`, `form_started_at`) must stay in sync across `sections/contact.html`, the JS, and `contact.php`.
+- The JS binds to `#contact form`, its `button[type=submit]`, `#contact-form-status`, and hidden `input[name=form_started_at]`, and silently no-ops if any is missing. Field names (`name`, `email`, `subject`, `message`, honeypot `company_website`) must stay in sync across `sections/contact.html`, the JS, and `contact.py`. `form_started_at` holds the client-side start time (ms) and is never sent; the JS sends the elapsed `form_fill_seconds` instead, so client/server clock skew can't affect the fill-time check.
 - Responses are `{success, message, requestId?}`. The JS maps machine codes (`blocked_*`) to plain-language text in `ERROR_MESSAGES` and shows other messages as-is; the status line is upper-cased by CSS, so keep messages sentence case. The JS also validates the `required` fields client-side and sets `aria-invalid` before sending.
-- Abuse controls: non-empty honeypot → 429; filled in under `min_fill_seconds` → 429; more than `rate_limit_max_requests` per window per SHA-256 IP hash → 429. Field length limits in `contact.php` mirror `schema.sql` column sizes and the inputs' `maxlength` in `sections/contact.html` — change all three together.
-- Config layering: `api/config.php` (committed placeholders) ← `CONTACT_*` env vars ← `api/config.local.php` (server-only, gitignored, merged via `array_replace_recursive`; template in `config.local.php.example`).
-- `api/.htaccess` denies every file in `api/` except `contact.php` (config, helpers, schema, and cPanel's per-directory `error_log`). A new public endpoint must be allowed there. Don't log exception messages: PDO messages can name the DB user and host.
-- `mailer.php` sends with PHP `mail()`; the `mail.smtp` config block is not currently read by any code.
+- Abuse controls: non-empty honeypot → 429; filled in under `MIN_FILL_SECONDS` → 429; more than `RATE_LIMIT_MAX_REQUESTS` per window per SHA-256 IP hash → 429 (count and insert run under a per-IP `pg_advisory_xact_lock`, so parallel bursts can't slip past). Server email validation is the WHATWG `type=email` rule, so it matches the browser's. The IP comes from Vercel's `x-real-ip` / `x-forwarded-for`, which Vercel overwrites, so they can't be spoofed. `MAX_LENGTHS` in `contact.py` mirror `db/schema.sql` column sizes and the inputs' `maxlength` in `sections/contact.html` — change all three together.
+- The JS timeout (`REQUEST_TIMEOUT_MS`, 25s) must stay above the function's `maxDuration` in `vercel.json` (20s).
+- Config is Vercel environment variables only: `DATABASE_URL` (injected by the Neon Marketplace integration; `POSTGRES_URL` also accepted), `RESEND_API_KEY`, `CONTACT_MAIL_TO`, `CONTACT_MAIL_FROM` (on a Resend-verified domain). Missing mail vars mean rows are stored as `email_failed`; a missing `DATABASE_URL` is a 500.
+- Log exception class names only, never messages: driver messages can name the DB user and host.
 
 ## Git and PR workflow
 

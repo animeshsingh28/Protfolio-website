@@ -9,11 +9,10 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
     }
 
-    // Generous, because the server saves the message before sending the email
-    // and mail() can block for a long time. This is not a hard bound on server
-    // time (PHP's max_execution_time excludes time blocked in I/O), so a
+    // Above the function's maxDuration (20s in vercel.json), plus cold-start
+    // margin. The server saves the message before sending the email, so a
     // timeout is reported as "may have been sent" rather than as a failure.
-    const REQUEST_TIMEOUT_MS = 45000;
+    const REQUEST_TIMEOUT_MS = 25000;
     const FALLBACK_ERROR = "Transmission failed. Please try again or email me directly.";
     const UNCERTAIN_ERROR = "No reply from the server. Your message may have been sent, so please check with me before resending.";
 
@@ -27,8 +26,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const requiredFields = Array.from(contactForm.querySelectorAll("[required]"));
 
+    // The start time stays on the client; only the elapsed seconds are sent,
+    // so the visitor's clock never has to agree with the server's.
     const resetStartTime = () => {
-        startedAtInput.value = String(Math.floor(Date.now() / 1000));
+        startedAtInput.value = String(Date.now());
+    };
+
+    const fillSeconds = () => {
+        const startedAt = Number(startedAtInput.value);
+        return startedAt > 0 ? Math.max(0, (Date.now() - startedAt) / 1000) : 0;
     };
 
     const setStatus = (message, toneClass) => {
@@ -96,7 +102,7 @@ document.addEventListener("DOMContentLoaded", () => {
             subject: String(formData.get("subject") || "").trim(),
             message: String(formData.get("message") || "").trim(),
             company_website: String(formData.get("company_website") || ""),
-            form_started_at: String(formData.get("form_started_at") || ""),
+            form_fill_seconds: fillSeconds(),
         };
 
         const controller = new AbortController();
@@ -108,7 +114,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         let receivedHeaders = false;
         try {
-            const response = await fetch("/api/contact.php", {
+            const response = await fetch("/api/contact", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -128,13 +134,18 @@ document.addEventListener("DOMContentLoaded", () => {
             try {
                 data = JSON.parse(text) || {};
             } catch {
-                data = {};
+                data = null;
             }
 
-            if (response.ok && data.success) {
+            if (response.ok && data?.success) {
                 markReceived(data.requestId);
+            } else if (!data && response.status >= 500) {
+                // A non-JSON 5xx comes from the platform (e.g. the function was
+                // stopped at its time limit), possibly after the message was
+                // saved, so don't invite a blind resend.
+                setStatus(UNCERTAIN_ERROR, "text-error");
             } else {
-                setStatus(describeError(data.message), "text-error");
+                setStatus(describeError(data?.message), "text-error");
             }
         } catch (error) {
             // Once headers arrived (or the timeout fired) the request may have

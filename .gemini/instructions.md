@@ -23,9 +23,9 @@ All changes — no matter how small — MUST be made on a separate branch.
 ## 1. Project Identity
 
 This is Animesh Singh's Data Engineer portfolio website. It uses a modular
-static-site architecture assembled by a Python build script, with a PHP/MySQL
-backend for contact form submissions. It is hosted on Namecheap cPanel with
-Zoho SMTP for email notifications.
+static-site architecture assembled by a Python build script, with a Python
+Vercel Function for contact form submissions (Neon Postgres for storage,
+Resend for email notifications). It is hosted on Vercel.
 
 ---
 
@@ -159,19 +159,18 @@ Always use named Tailwind tokens — never raw hex. Key tokens:
 
 ### Files
 
-| File                        | Role                                                |
-|:----------------------------|:----------------------------------------------------|
-| `api/contact.php`           | HTTP POST endpoint — validation, rate-limit, insert  |
-| `api/config.php`            | Git-safe config with env var fallbacks               |
-| `api/config.local.php`      | Server-only secrets (gitignored)                     |
-| `api/db.php`                | PDO helpers (insert, update, count by IP)            |
-| `api/mailer.php`            | Header-injection-safe email dispatch via `mail()`    |
-| `api/schema.sql`            | DDL for `contact_submissions` (InnoDB, utf8mb4)      |
+| File                        | Role                                                    |
+|:----------------------------|:--------------------------------------------------------|
+| `api/contact.py`            | Vercel Function `POST /api/contact` — validation, rate-limit, insert, email via Resend |
+| `requirements.txt`          | Function dependencies (`psycopg`)                       |
+| `db/schema.sql`             | Postgres DDL for `contact_submissions` (run once in Neon) |
+| `vercel.json`               | Function `maxDuration`, security headers, `cleanUrls`   |
+| `.vercelignore`             | Allowlist of files that get deployed                    |
 
 ### Security Layers
 
 1. **Honeypot:** Hidden `company_website` field must be empty.
-2. **Fill-time check:** `now - form_started_at ≥ 3 seconds`.
+2. **Fill-time check:** client-measured `form_fill_seconds ≥ 3`.
 3. **Rate limit:** Max 5 requests per 300 seconds per IP hash.
 4. **Input validation:** Required fields, length limits, email validation.
 5. **IP hashing:** SHA-256 hash stored, never raw IP.
@@ -179,17 +178,18 @@ Always use named Tailwind tokens — never raw hex. Key tokens:
 
 ### Secrets Management
 
-- `api/config.php` is committed (placeholders + env var support).
-- Real credentials go in `api/config.local.php` on the server.
-- Use `api/config.local.php.example` as a template.
-- **Never commit `api/config.local.php` to git.**
+- All secrets are Vercel project environment variables: `DATABASE_URL`
+  (set by the Neon integration), `RESEND_API_KEY`, `CONTACT_MAIL_TO`,
+  `CONTACT_MAIL_FROM`.
+- **Never commit secrets or `.env*` files to git.**
 
 ---
 
 ## 7. Frontend Contact Form (`js/form-handler.js`)
 
-- On page load: sets `form_started_at` to Unix epoch seconds.
-- On submit: collects JSON payload → `POST /api/contact.php`.
+- On page load: stores the start time (ms) in hidden `form_started_at`; on
+  submit it sends the elapsed `form_fill_seconds`, never the timestamp.
+- On submit: collects JSON payload → `POST /api/contact`.
 - Status updates rendered in `#contact-form-status` (`aria-live="polite"`).
 - Status codes: `TRANSMITTING...` → `MESSAGE_ACCEPTED` (success, tertiary)
   or `TRANSMISSION_FAILED` / `NETWORK_ERROR_TRY_AGAIN` (error, red).
@@ -201,7 +201,7 @@ Always use named Tailwind tokens — never raw hex. Key tokens:
 
 | Document                          | Contents                                     |
 |:----------------------------------|:---------------------------------------------|
-| `README.md`                       | Full dev guide, build workflow, cPanel setup  |
+| `README.md`                       | Full dev guide, build workflow, Vercel setup  |
 | `DESIGN.md`                       | Kinetic Blueprint design manifesto            |
 | `.github/copilot-instructions.md` | Global AI agent coding rules                  |
 | `refrence docs/Animesh's Resume.pdf` | Career data grounding portfolio content    |
@@ -218,7 +218,8 @@ When making any change to this project, follow this sequence:
 3. **Rebuild.** Run `python scripts/build_site.py`.
 4. **Verify.** Confirm `index.html` was regenerated and check in browser.
 5. **Backend changes.** If touching `api/`, ensure the security layers
-   remain intact and `config.local.php` is never committed.
+   remain intact and no secrets are committed. A new deployed file must be
+   allowed in `.vercelignore`.
 
 ---
 
@@ -229,7 +230,7 @@ When making any change to this project, follow this sequence:
 - ❌ Using raw hex colors instead of Tailwind tokens
 - ❌ Adding `<hr>` or border-based section dividers
 - ❌ Using `ring-*` or `border-*` on form inputs (use `.param-input`)
-- ❌ Committing `api/config.local.php` to git
+- ❌ Committing secrets or `.env*` files to git
 - ❌ Adding `<html>`, `<head>`, or `<body>` tags inside section fragments
 - ❌ Forgetting to rebuild after editing source files
 - ❌ Using friendly/rounded icons (must be Material Symbols thin stroke)
