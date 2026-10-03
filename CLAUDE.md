@@ -40,8 +40,8 @@ Non-negotiable rules:
 - Typography: `font-headline` (Space Grotesk, uppercase, tight tracking), `font-body` (Inter), `font-mono` (JetBrains Mono, uppercase, `tracking-widest`) for data/metadata. Metadata labels are `text-[9px]`/`text-[10px]` mono with `tracking-[0.2em]`.
 - Use named Tailwind color tokens, not raw hex.
 - Form fields use the `.param-input` class — never Tailwind `ring-*`/`border-*` on inputs.
-- Icons: `<span aria-hidden="true" class="material-symbols-outlined" data-icon="name">name</span>` (thin stroke via `wght 300`). The icon font is subset: the template's Material Symbols link lists every icon in use in `icon_names=` (alphabetical). A new icon must be added there, or it renders as its literal name. Icon-only links/buttons need an `aria-label`. Buttons get `active:translate-y-1 transition-transform`. No placeholder `href="#"` links.
-- Tailwind utilities only. Custom CSS lives solely in `css/design-tokens.css` (`.blueprint-grid`, `.param-input`, `::selection`, icon settings) — no new CSS files, `<style>` blocks, or inline `style=`.
+- Icons: `<span aria-hidden="true" class="material-symbols-outlined" data-icon="name">name</span>` (thin stroke via `wght 300`, set by the `@24,300,0,0` part of the font URL; the subset font is static, so CSS `font-variation-settings` has no effect). The icon font is subset: the template's Material Symbols link lists every icon in use in `icon_names=` (alphabetical). A new icon must be added there, or it renders as its literal name. Icon-only links/buttons need an `aria-label`. Buttons get `active:translate-y-1 transition-transform`. No placeholder `href="#"` links.
+- Tailwind utilities only. Custom CSS lives solely in `css/design-tokens.css` (`.blueprint-grid`, `.param-input`, `::selection`) — no new CSS files, `<style>` blocks, or inline `style=`.
 
 ### Color token gotcha
 

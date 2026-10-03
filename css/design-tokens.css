@@ -16,9 +16,9 @@
     background-size: 48px 48px;
 }
 
-.material-symbols-outlined {
-    font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
-}
+/* Icon weight/fill are fixed by the font request in src/index.template.html
+   (`@24,300,0,0` = opsz 24, wght 300, FILL 0, GRAD 0). The subset font is a
+   static instance, so font-variation-settings here would have no effect. */
 
 ::selection {
     background-color: rgb(var(--token-primary-container));

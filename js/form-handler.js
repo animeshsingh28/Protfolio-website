@@ -9,8 +9,11 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
     }
 
-    const REQUEST_TIMEOUT_MS = 25000;
+    // Above PHP's default 30s max_execution_time, so the browser does not give
+    // up while the server is still saving and emailing the message.
+    const REQUEST_TIMEOUT_MS = 45000;
     const FALLBACK_ERROR = "Transmission failed. Please try again or email me directly.";
+    const UNCERTAIN_ERROR = "No reply from the server. Your message may have been sent, so please check with me before resending.";
 
     // The API returns either readable text or a machine code; map the codes.
     // Keep messages in sentence case: the status line is upper-cased by CSS,
@@ -39,22 +42,35 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const isFieldValid = (field) => field.value.trim() !== "" && field.validity.valid;
 
-    const validateFields = () => {
-        const invalidFields = requiredFields.filter((field) => !isFieldValid(field));
-        requiredFields.forEach((field) => {
-            if (invalidFields.includes(field)) {
-                field.setAttribute("aria-invalid", "true");
-            } else {
-                field.removeAttribute("aria-invalid");
-            }
-        });
-        return invalidFields;
+    const validateFields = () => requiredFields.filter((field) => {
+        const invalid = !isFieldValid(field);
+        if (invalid) {
+            field.setAttribute("aria-invalid", "true");
+        } else {
+            field.removeAttribute("aria-invalid");
+        }
+        return invalid;
+    });
+
+    let showingValidationError = false;
+
+    const markReceived = (requestId) => {
+        setStatus("MESSAGE_ACCEPTED", "text-tertiary");
+        contactForm.reset();
+        resetStartTime();
+        if (requestId) {
+            console.info("contact request id:", requestId);
+        }
     };
 
     resetStartTime();
 
     contactForm.addEventListener("input", (event) => {
         event.target.removeAttribute?.("aria-invalid");
+        if (showingValidationError && !requiredFields.some((field) => field.hasAttribute("aria-invalid"))) {
+            showingValidationError = false;
+            setStatus("IDLE", "text-secondary");
+        }
     });
 
     contactForm.addEventListener("submit", async (event) => {
@@ -63,9 +79,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const invalidFields = validateFields();
         if (invalidFields.length > 0) {
             setStatus("Please fill in every field with a valid email address.", "text-error");
+            showingValidationError = true;
             invalidFields[0].focus();
             return;
         }
+        showingValidationError = false;
 
         const formData = new FormData(contactForm);
         const payload = {
@@ -84,8 +102,9 @@ document.addEventListener("DOMContentLoaded", () => {
         contactForm.setAttribute("aria-busy", "true");
         setStatus("TRANSMITTING...", "text-secondary");
 
+        let response;
         try {
-            const response = await fetch("/api/contact.php", {
+            response = await fetch("/api/contact.php", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -93,22 +112,28 @@ document.addEventListener("DOMContentLoaded", () => {
                 body: JSON.stringify(payload),
                 signal: controller.signal,
             });
+        } catch (error) {
+            clearTimeout(timeoutId);
+            const timedOut = error?.name === "AbortError";
+            setStatus(timedOut ? UNCERTAIN_ERROR : "Network error. Please try again.", "text-error");
+            submitButton.disabled = false;
+            contactForm.removeAttribute("aria-busy");
+            return;
+        }
 
+        // Headers arrived, so the server has finished; don't abort the body read.
+        clearTimeout(timeoutId);
+
+        try {
             const data = await response.json().catch(() => ({}));
 
-            if (response.ok && data.success) {
-                setStatus("MESSAGE_ACCEPTED", "text-tertiary");
-                contactForm.reset();
-                resetStartTime();
-                if (data.requestId) {
-                    console.info("contact request id:", data.requestId);
-                }
+            // A requestId means the message is stored, even if the email
+            // notification failed (500), so treat it as received.
+            if ((response.ok && data.success) || data.requestId) {
+                markReceived(data.requestId);
             } else {
                 setStatus(describeError(data.message), "text-error");
             }
-        } catch (error) {
-            const timedOut = error?.name === "AbortError";
-            setStatus(timedOut ? "Request timed out. Please try again." : "Network error. Please try again.", "text-error");
         } finally {
             clearTimeout(timeoutId);
             submitButton.disabled = false;
