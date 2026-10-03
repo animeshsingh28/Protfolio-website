@@ -9,8 +9,13 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
     }
 
-    const REQUEST_TIMEOUT_MS = 25000;
+    // Generous, because the server saves the message before sending the email
+    // and mail() can block for a long time. This is not a hard bound on server
+    // time (PHP's max_execution_time excludes time blocked in I/O), so a
+    // timeout is reported as "may have been sent" rather than as a failure.
+    const REQUEST_TIMEOUT_MS = 45000;
     const FALLBACK_ERROR = "Transmission failed. Please try again or email me directly.";
+    const UNCERTAIN_ERROR = "No reply from the server. Your message may have been sent, so please check with me before resending.";
 
     // The API returns either readable text or a machine code; map the codes.
     // Keep messages in sentence case: the status line is upper-cased by CSS,
@@ -39,22 +44,37 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const isFieldValid = (field) => field.value.trim() !== "" && field.validity.valid;
 
-    const validateFields = () => {
-        const invalidFields = requiredFields.filter((field) => !isFieldValid(field));
-        requiredFields.forEach((field) => {
-            if (invalidFields.includes(field)) {
-                field.setAttribute("aria-invalid", "true");
-            } else {
-                field.removeAttribute("aria-invalid");
-            }
-        });
-        return invalidFields;
+    const validateFields = () => requiredFields.filter((field) => {
+        const invalid = !isFieldValid(field);
+        if (invalid) {
+            field.setAttribute("aria-invalid", "true");
+        } else {
+            field.removeAttribute("aria-invalid");
+        }
+        return invalid;
+    });
+
+    let showingValidationError = false;
+
+    const markReceived = (requestId) => {
+        setStatus("MESSAGE_ACCEPTED", "text-tertiary");
+        contactForm.reset();
+        resetStartTime();
+        if (requestId) {
+            console.info("contact request id:", requestId);
+        }
     };
 
     resetStartTime();
 
     contactForm.addEventListener("input", (event) => {
         event.target.removeAttribute?.("aria-invalid");
+        // Clear the error line only once every required field is actually valid,
+        // not merely edited.
+        if (showingValidationError && requiredFields.every(isFieldValid)) {
+            showingValidationError = false;
+            setStatus("IDLE", "text-secondary");
+        }
     });
 
     contactForm.addEventListener("submit", async (event) => {
@@ -63,9 +83,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const invalidFields = validateFields();
         if (invalidFields.length > 0) {
             setStatus("Please fill in every field with a valid email address.", "text-error");
+            showingValidationError = true;
             invalidFields[0].focus();
             return;
         }
+        showingValidationError = false;
 
         const formData = new FormData(contactForm);
         const payload = {
@@ -84,6 +106,7 @@ document.addEventListener("DOMContentLoaded", () => {
         contactForm.setAttribute("aria-busy", "true");
         setStatus("TRANSMITTING...", "text-secondary");
 
+        let receivedHeaders = false;
         try {
             const response = await fetch("/api/contact.php", {
                 method: "POST",
@@ -93,22 +116,30 @@ document.addEventListener("DOMContentLoaded", () => {
                 body: JSON.stringify(payload),
                 signal: controller.signal,
             });
+            receivedHeaders = true;
 
-            const data = await response.json().catch(() => ({}));
+            // The timer keeps running through the body read, so a stalled body
+            // also ends in the "may have been sent" message instead of hanging.
+            // Headers mean the server has finished, so a body that fails to
+            // arrive (abort or dropped connection) is reported as uncertain.
+            // Only a complete body that isn't JSON falls back to an error.
+            const text = await response.text();
+            let data;
+            try {
+                data = JSON.parse(text) || {};
+            } catch {
+                data = {};
+            }
 
             if (response.ok && data.success) {
-                setStatus("MESSAGE_ACCEPTED", "text-tertiary");
-                contactForm.reset();
-                resetStartTime();
-                if (data.requestId) {
-                    console.info("contact request id:", data.requestId);
-                }
+                markReceived(data.requestId);
             } else {
                 setStatus(describeError(data.message), "text-error");
             }
         } catch (error) {
-            const timedOut = error?.name === "AbortError";
-            setStatus(timedOut ? "Request timed out. Please try again." : "Network error. Please try again.", "text-error");
+            // Once headers arrived (or the timeout fired) the request may have
+            // reached the server, so don't invite a blind resend.
+            setStatus(controller.signal.aborted || receivedHeaders ? UNCERTAIN_ERROR : "Network error. Please try again.", "text-error");
         } finally {
             clearTimeout(timeoutId);
             submitButton.disabled = false;

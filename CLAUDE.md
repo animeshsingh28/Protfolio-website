@@ -40,8 +40,8 @@ Non-negotiable rules:
 - Typography: `font-headline` (Space Grotesk, uppercase, tight tracking), `font-body` (Inter), `font-mono` (JetBrains Mono, uppercase, `tracking-widest`) for data/metadata. Metadata labels are `text-[9px]`/`text-[10px]` mono with `tracking-[0.2em]`.
 - Use named Tailwind color tokens, not raw hex.
 - Form fields use the `.param-input` class — never Tailwind `ring-*`/`border-*` on inputs.
-- Icons: `<span aria-hidden="true" class="material-symbols-outlined" data-icon="name">name</span>` (thin stroke via `wght 300`). The icon font is subset: the template's Material Symbols link lists every icon in use in `icon_names=` (alphabetical). A new icon must be added there, or it renders as its literal name. Icon-only links/buttons need an `aria-label`. Buttons get `active:translate-y-1 transition-transform`. No placeholder `href="#"` links.
-- Tailwind utilities only. Custom CSS lives solely in `css/design-tokens.css` (`.blueprint-grid`, `.param-input`, `::selection`, icon settings) — no new CSS files, `<style>` blocks, or inline `style=`.
+- Icons: `<span aria-hidden="true" class="material-symbols-outlined" data-icon="name">name</span>` (thin stroke via `wght 300`, set by the `@24,300,0,0` part of the font URL; the subset font is static, so CSS `font-variation-settings` has no effect). The icon font is subset: the template's Material Symbols link lists every icon in use in `icon_names=` (alphabetical). A new icon must be added there, or it renders as its literal name. Icon-only links/buttons need an `aria-label`. Buttons get `active:translate-y-1 transition-transform`. No placeholder `href="#"` links.
+- Tailwind utilities only. Custom CSS lives solely in `css/design-tokens.css` (`.blueprint-grid`, `.param-input`, `::selection`) — no new CSS files, `<style>` blocks, or inline `style=`.
 
 ### Color token gotcha
 
@@ -51,12 +51,13 @@ Opacity modifiers (`border-outline-variant/10`, `hover:border-primary-container/
 
 ## Contact form backend (`api/`)
 
-Flow: `js/form-handler.js` POSTs JSON to `/api/contact.php` → validation → rate-limit check and insert into `contact_submissions` (`db.php`, `schema.sql`) → notification via `mailer.php` → row status updated `received` → `emailed` / `email_failed`.
+Flow: `js/form-handler.js` POSTs JSON to `/api/contact.php` → validation → rate-limit check and insert into `contact_submissions` (`db.php`, `schema.sql`) → notification via `mailer.php` → row status updated `received` → `emailed` / `email_failed`. Once the row is stored the API returns 200 success even if the email fails (the failure goes to the PHP error log), so visitors don't resend.
 
 - The JS binds to `#contact form`, its `button[type=submit]`, `#contact-form-status`, and hidden `input[name=form_started_at]`, and silently no-ops if any is missing. Field names (`name`, `email`, `subject`, `message`, honeypot `company_website`, `form_started_at`) must stay in sync across `sections/contact.html`, the JS, and `contact.php`.
 - Responses are `{success, message, requestId?}`. The JS maps machine codes (`blocked_*`) to plain-language text in `ERROR_MESSAGES` and shows other messages as-is; the status line is upper-cased by CSS, so keep messages sentence case. The JS also validates the `required` fields client-side and sets `aria-invalid` before sending.
 - Abuse controls: non-empty honeypot → 429; filled in under `min_fill_seconds` → 429; more than `rate_limit_max_requests` per window per SHA-256 IP hash → 429. Field length limits in `contact.php` mirror `schema.sql` column sizes and the inputs' `maxlength` in `sections/contact.html` — change all three together.
 - Config layering: `api/config.php` (committed placeholders) ← `CONTACT_*` env vars ← `api/config.local.php` (server-only, gitignored, merged via `array_replace_recursive`; template in `config.local.php.example`).
+- `api/.htaccess` denies every file in `api/` except `contact.php` (config, helpers, schema, and cPanel's per-directory `error_log`). A new public endpoint must be allowed there. Don't log exception messages: PDO messages can name the DB user and host.
 - `mailer.php` sends with PHP `mail()`; the `mail.smtp` config block is not currently read by any code.
 
 ## Git and PR workflow
