@@ -173,14 +173,18 @@ Always use named Tailwind tokens — never raw hex. Key tokens:
 2. **Fill-time check:** client-measured `form_fill_seconds ≥ 3`.
 3. **Rate limit:** Max 5 requests per 300 seconds per IP hash.
 4. **Input validation:** Required fields, length limits, email validation.
-5. **IP hashing:** SHA-256 hash stored, never raw IP.
+5. **IP hashing:** HMAC-SHA256 keyed by `CONTACT_IP_HASH_SECRET` stored, never
+   raw IP (plain SHA-256 fallback, logged once per process, if the secret is unset).
 6. **Header injection:** `\r` and `\n` stripped from mail headers.
+7. **JSON only:** a no-JS form submit (urlencoded or no content type) stores
+   nothing and gets a 303 to `/#contact`, where a `<noscript>` note offers
+   email; other content types get 415.
 
 ### Secrets Management
 
 - All secrets are Vercel project environment variables: `DATABASE_URL`
   (set by the Neon integration), `RESEND_API_KEY`, `CONTACT_MAIL_TO`,
-  `CONTACT_MAIL_FROM`.
+  `CONTACT_MAIL_FROM`, `CONTACT_IP_HASH_SECRET`.
 - **Never commit secrets or `.env*` files to git.**
 
 ---

@@ -13,12 +13,14 @@ Environment (set in the Vercel project):
                     e.g. "Hornsloth Portfolio <contact@hornsloth.com>"
   CONTACT_IP_HASH_SECRET
                     Key for the HMAC-SHA256 of the visitor IP used for rate
-                    limiting. If unset, a plain SHA-256 is used (with a log
-                    warning). Changing it resets every rate-limit window once.
+                    limiting (mark it Sensitive). If unset, a plain SHA-256 is
+                    used and a warning is logged once per function instance.
+                    Changing it resets every rate-limit window once.
 
-Only JSON bodies are processed. A no-JS form submit (urlencoded or no content
-type) stores nothing and is redirected (303) back to /#contact, where a
-<noscript> note points visitors to email instead.
+Only application/json bodies are processed. A no-JS form submit (urlencoded or
+no content type) stores nothing and gets a 303 redirect back to /#contact,
+where a <noscript> note points visitors to email instead. Any other content
+type is a 415.
 """
 
 from __future__ import annotations
@@ -29,6 +31,7 @@ import json
 import os
 import re
 import secrets
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -107,13 +110,27 @@ def parse_body(content_type: str, raw: bytes) -> dict:
     raise ApiError(415, "Unsupported payload type")
 
 
+_ip_secret_warned = False
+_ip_secret_warned_lock = threading.Lock()
+
+
+def warn_ip_secret_missing_once() -> None:
+    # Once per process, not per request, so the logs stay readable.
+    global _ip_secret_warned
+    with _ip_secret_warned_lock:
+        if _ip_secret_warned:
+            return
+        _ip_secret_warned = True
+    log("CONTACT_IP_HASH_SECRET is not set; using unkeyed SHA-256 for the IP hash")
+
+
 def hash_ip(ip: str) -> str:
     # Keyed, so the stored hash can't be reversed by hashing every IPv4 address.
     secret = (os.environ.get("CONTACT_IP_HASH_SECRET") or "").strip()
     if secret:
         return hmac.new(secret.encode("utf-8"), ip.encode("utf-8"), hashlib.sha256).hexdigest()
     # A privacy setting must not take the form down: fall back, but say so.
-    log("CONTACT_IP_HASH_SECRET is not set; using unkeyed SHA-256 for the IP hash")
+    warn_ip_secret_missing_once()
     return hashlib.sha256(ip.encode("utf-8")).hexdigest()
 
 

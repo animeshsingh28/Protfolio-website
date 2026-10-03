@@ -98,6 +98,7 @@ The contact form posts to `/api/contact`, a Python Vercel Function (`api/contact
    - `RESEND_API_KEY`: the Resend key (mark it Sensitive)
    - `CONTACT_MAIL_TO`: where notifications go
    - `CONTACT_MAIL_FROM`: e.g. `Hornsloth Portfolio <contact@hornsloth.com>` (must be on the verified domain)
+   - `CONTACT_IP_HASH_SECRET`: a long random string (mark it Sensitive), e.g. from `python -c "import secrets; print(secrets.token_hex(32))"`. It keys the HMAC-SHA256 of the visitor IP used for rate limiting, so stored hashes can't be reversed by hashing every IPv4 address. If it is unset the function falls back to plain SHA-256 and logs a warning once per instance. Changing it resets every rate-limit window once.
 5. Redeploy so the function picks up the variables.
 
 ### Secrets management
@@ -108,9 +109,9 @@ The contact form posts to `/api/contact`, a Python Vercel Function (`api/contact
 ### API behavior
 
 - Method: `POST` only (anything else is 405)
-- Content types: `application/json`, `application/x-www-form-urlencoded` (the no-JS form fallback)
+- Content type: `application/json` only. A no-JS form submit (`application/x-www-form-urlencoded` or no content type) stores nothing and gets a `303` redirect to `/#contact`, where a `<noscript>` note offers the email address instead. Any other content type is a `415`.
 - Required fields: `name`, `email`, `subject`, `message`
-- Abuse controls: honeypot (`company_website`), fill-time (`form_fill_seconds`), and 5 requests per 5 minutes per hashed IP
+- Abuse controls: honeypot (`company_website`), fill-time (`form_fill_seconds`), and 5 requests per 5 minutes per IP hash (HMAC-SHA256 keyed by `CONTACT_IP_HASH_SECRET`; plain SHA-256 if it is unset). The raw IP is never stored.
 - Once a submission is stored the response is success even if the email fails; check the Vercel runtime logs and rows with `status = 'email_failed'`
 
 ### Frontend hook
