@@ -106,6 +106,7 @@ document.addEventListener("DOMContentLoaded", () => {
         contactForm.setAttribute("aria-busy", "true");
         setStatus("TRANSMITTING...", "text-secondary");
 
+        let receivedHeaders = false;
         try {
             const response = await fetch("/api/contact.php", {
                 method: "POST",
@@ -115,16 +116,19 @@ document.addEventListener("DOMContentLoaded", () => {
                 body: JSON.stringify(payload),
                 signal: controller.signal,
             });
+            receivedHeaders = true;
 
             // The timer keeps running through the body read, so a stalled body
             // also ends in the "may have been sent" message instead of hanging.
-            let data = {};
+            // Headers mean the server has finished, so a body that fails to
+            // arrive (abort or dropped connection) is reported as uncertain.
+            // Only a complete body that isn't JSON falls back to an error.
+            const text = await response.text();
+            let data;
             try {
-                data = await response.json();
-            } catch (error) {
-                if (controller.signal.aborted) {
-                    throw error;
-                }
+                data = JSON.parse(text) || {};
+            } catch {
+                data = {};
             }
 
             if (response.ok && data.success) {
@@ -133,9 +137,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 setStatus(describeError(data.message), "text-error");
             }
         } catch (error) {
-            // The request may have reached the server before the abort, so
-            // don't invite a blind resend.
-            setStatus(controller.signal.aborted ? UNCERTAIN_ERROR : "Network error. Please try again.", "text-error");
+            // Once headers arrived (or the timeout fired) the request may have
+            // reached the server, so don't invite a blind resend.
+            setStatus(controller.signal.aborted || receivedHeaders ? UNCERTAIN_ERROR : "Network error. Please try again.", "text-error");
         } finally {
             clearTimeout(timeoutId);
             submitButton.disabled = false;

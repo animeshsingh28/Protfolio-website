@@ -13,6 +13,17 @@ function respond(int $statusCode, array $data): void
     exit;
 }
 
+// The row is already stored when this runs, so a failed status update must not
+// turn the response into an error and invite a duplicate resend.
+function update_status_best_effort(PDO $pdo, string $requestId, string $status, bool $markSent): void
+{
+    try {
+        contact_update_status($pdo, $requestId, $status, $markSent);
+    } catch (Throwable $error) {
+        error_log('contact.php: status update to ' . $status . ' failed for request ' . $requestId . ': ' . get_class($error));
+    }
+}
+
 function clean_text(string $value): string
 {
     $value = trim($value);
@@ -134,7 +145,7 @@ try {
     ], $requestId);
 
     if ($mailResult['ok']) {
-        contact_update_status($pdo, $requestId, 'emailed', true);
+        update_status_best_effort($pdo, $requestId, 'emailed', true);
         respond(200, [
             'success' => true,
             'message' => 'Message received. I will get back to you soon.',
@@ -144,7 +155,7 @@ try {
 
     // The message is stored, so the visitor is done; resending would only
     // create a duplicate. Log the failure so the owner can find the row.
-    contact_update_status($pdo, $requestId, 'email_failed', false);
+    update_status_best_effort($pdo, $requestId, 'email_failed', false);
     error_log('contact.php: notification email failed for request ' . $requestId . ' (row saved with status email_failed)');
     respond(200, [
         'success' => true,
@@ -152,7 +163,8 @@ try {
         'requestId' => $requestId,
     ]);
 } catch (Throwable $error) {
-    error_log('contact.php: ' . get_class($error) . ': ' . $error->getMessage());
+    // Class only: PDO messages can name the DB user and host.
+    error_log('contact.php: ' . get_class($error) . ' (code ' . $error->getCode() . ')');
     respond(500, [
         'success' => false,
         'message' => 'Server error',

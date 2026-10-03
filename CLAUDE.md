@@ -57,6 +57,7 @@ Flow: `js/form-handler.js` POSTs JSON to `/api/contact.php` → validation → r
 - Responses are `{success, message, requestId?}`. The JS maps machine codes (`blocked_*`) to plain-language text in `ERROR_MESSAGES` and shows other messages as-is; the status line is upper-cased by CSS, so keep messages sentence case. The JS also validates the `required` fields client-side and sets `aria-invalid` before sending.
 - Abuse controls: non-empty honeypot → 429; filled in under `min_fill_seconds` → 429; more than `rate_limit_max_requests` per window per SHA-256 IP hash → 429. Field length limits in `contact.php` mirror `schema.sql` column sizes and the inputs' `maxlength` in `sections/contact.html` — change all three together.
 - Config layering: `api/config.php` (committed placeholders) ← `CONTACT_*` env vars ← `api/config.local.php` (server-only, gitignored, merged via `array_replace_recursive`; template in `config.local.php.example`).
+- `api/.htaccess` denies every file in `api/` except `contact.php` (config, helpers, schema, and cPanel's per-directory `error_log`). A new public endpoint must be allowed there. Don't log exception messages: PDO messages can name the DB user and host.
 - `mailer.php` sends with PHP `mail()`; the `mail.smtp` config block is not currently read by any code.
 
 ## Git and PR workflow
