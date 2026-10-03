@@ -59,6 +59,13 @@ Flow: `js/form-handler.js` POSTs JSON to `/api/contact.php` → validation → r
 - Config layering: `api/config.php` (committed placeholders) ← `CONTACT_*` env vars ← `api/config.local.php` (server-only, gitignored, merged via `array_replace_recursive`; template in `config.local.php.example`).
 - `mailer.php` sends with PHP `mail()`; the `mail.smtp` config block is not currently read by any code.
 
+## Git and PR workflow
+
+- Never commit directly to `main`. Work on a branch and merge through a pull request.
+- Before merging any PR, run `/code-review <PR#>` on it and report the findings. Don't merge while correctness findings are unresolved unless the user explicitly says to; fix them on the PR branch and review again.
+- Only merge a PR when the user asks.
+- If a PR conflicts with `main`, or two branches changed overlapping code, use the `merge-manager` agent (`.claude/agents/merge-manager.md`). It merges `main` into the PR branch and never merges into `main` itself. Its conflict resolution is new code, so run `/code-review` on the PR again afterwards.
+
 ## Copilot agent config
 
 `.github/agents/` (Design Review, Codebase Health, Resume Sync) and `.github/prompts/` hold the review checklists and edit-boundary workflows summarized above; consult them when asked for a design or codebase-health review.
