@@ -28,13 +28,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // The start time stays on the client; only the elapsed seconds are sent,
     // so the visitor's clock never has to agree with the server's.
+    // performance.now() is monotonic, so an OS clock change mid-fill can't
+    // make the elapsed time negative.
     const resetStartTime = () => {
-        startedAtInput.value = String(Date.now());
+        startedAtInput.value = String(performance.now());
     };
 
     const fillSeconds = () => {
-        const startedAt = Number(startedAtInput.value);
-        return startedAt > 0 ? Math.max(0, (Date.now() - startedAt) / 1000) : 0;
+        if (startedAtInput.value === "") {
+            return 0;
+        }
+        return Math.max(0, (performance.now() - Number(startedAtInput.value)) / 1000);
     };
 
     const setStatus = (message, toneClass) => {

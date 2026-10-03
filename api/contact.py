@@ -34,9 +34,12 @@ RATE_LIMIT_MAX_REQUESTS = 5
 MAX_BODY_BYTES = 64 * 1024
 # Keep the worst case well under maxDuration (20s in vercel.json): a killed
 # invocation after the INSERT leaves the visitor unsure whether it was sent.
-# urlopen applies its timeout to the connect and to each read separately.
+# urlopen applies its timeout to the connect and to each read separately, so
+# the mail timeout is also capped by what is left of REQUEST_BUDGET_SECONDS.
 DB_CONNECT_TIMEOUT_SECONDS = 5
 MAIL_TIMEOUT_SECONDS = 4
+REQUEST_BUDGET_SECONDS = 14
+MIN_MAIL_SECONDS = 1.5
 
 # Mirror the column sizes in db/schema.sql and the inputs' maxlength in
 # sections/contact.html; change all three together.
@@ -45,10 +48,11 @@ MAX_LENGTHS = {"name": 100, "email": 254, "subject": 150, "message": 5000}
 RESEND_URL = "https://api.resend.com/emails"
 SUCCESS_MESSAGE = "Message received. I will get back to you soon."
 
-# The WHATWG rule browsers use for <input type="email">, so the server accepts
-# exactly what the form's client-side validation does, plus a dotted domain.
+# The WHATWG rule browsers use for <input type="email">, plus a dotted domain
+# and no leading, trailing, or doubled dots in the local part (RFC 5321; Resend
+# rejects those as reply_to, which would silently lose the notification).
 EMAIL_RE = re.compile(
-    r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+"
+    r"^(?!\.)(?!.*\.\.)[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+(?<!\.)"
     r"@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
     r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+\Z"
 )
@@ -126,7 +130,7 @@ def database_url() -> str:
     return url
 
 
-def send_mail(fields: dict, request_id: str) -> bool:
+def send_mail(fields: dict, request_id: str, timeout: float) -> bool:
     api_key = os.environ.get("RESEND_API_KEY")
     to = os.environ.get("CONTACT_MAIL_TO")
     sender = os.environ.get("CONTACT_MAIL_FROM")
@@ -167,7 +171,7 @@ def send_mail(fields: dict, request_id: str) -> bool:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=MAIL_TIMEOUT_SECONDS) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             return 200 <= response.status < 300
     except urllib.error.HTTPError as error:
         log(f"resend returned HTTP {error.code} for request {request_id}")
@@ -195,7 +199,17 @@ def update_status_best_effort(conn: psycopg.Connection, request_id: str, status:
         log(f"status update to {status} failed for request {request_id}: {type(error).__name__}")
 
 
-def handle_submission(fields: dict, ip: str, user_agent: str) -> dict:
+def mail_timeout(started: float) -> float | None:
+    """Per-operation mail timeout from what is left of the budget, or None
+    when too little is left to try (the row is then marked email_failed)."""
+    remaining = REQUEST_BUDGET_SECONDS - (time.monotonic() - started)
+    if remaining < MIN_MAIL_SECONDS:
+        return None
+    # Connect, TLS handshake, and response read can each take the full timeout.
+    return min(MAIL_TIMEOUT_SECONDS, remaining / 3)
+
+
+def handle_submission(fields: dict, ip: str, user_agent: str, started: float) -> dict:
     request_id = secrets.token_hex(16)
     ip_hash = hashlib.sha256(ip.encode("utf-8")).hexdigest()
 
@@ -232,7 +246,10 @@ def handle_submission(fields: dict, ip: str, user_agent: str) -> dict:
                 ),
             )
 
-        if send_mail(fields, request_id):
+        timeout = mail_timeout(started)
+        if timeout is None:
+            log(f"skipping email for request {request_id}: request time budget used up")
+        if timeout is not None and send_mail(fields, request_id, timeout):
             update_status_best_effort(conn, request_id, "emailed")
         else:
             update_status_best_effort(conn, request_id, "email_failed")
@@ -266,6 +283,7 @@ class handler(BaseHTTPRequestHandler):
         return forwarded.split(",")[0].strip() or self.client_address[0]
 
     def do_POST(self) -> None:
+        started = time.monotonic()
         try:
             try:
                 length = int(self.headers.get("Content-Length") or 0)
@@ -277,7 +295,7 @@ class handler(BaseHTTPRequestHandler):
             data = parse_body(self.headers.get("Content-Type") or "", self.rfile.read(length))
             fields = validate(data)
             user_agent = clean_text((self.headers.get("User-Agent") or "")[:255])
-            self.respond(200, handle_submission(fields, self.client_ip(), user_agent))
+            self.respond(200, handle_submission(fields, self.client_ip(), user_agent, started))
         except ApiError as error:
             self.respond(error.status, {"success": False, "message": error.message})
         except Exception as error:

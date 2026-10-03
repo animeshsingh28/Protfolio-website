@@ -187,7 +187,7 @@ Always use named Tailwind tokens — never raw hex. Key tokens:
 
 ## 7. Frontend Contact Form (`js/form-handler.js`)
 
-- On page load: stores the start time (ms) in hidden `form_started_at`; on
+- On page load: stores `performance.now()` in hidden `form_started_at`; on
   submit it sends the elapsed `form_fill_seconds`, never the timestamp.
 - On submit: collects JSON payload → `POST /api/contact`.
 - Status updates rendered in `#contact-form-status` (`aria-live="polite"`).
