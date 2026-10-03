@@ -5,11 +5,15 @@ Data Engineer portfolio website built as a modular static source with a generate
 ## Project Structure
 
 - `index.html`: Generated deployable output. Do not edit this directly for normal content/style updates.
-- `src/index.template.html`: Page shell (head, Tailwind config, section placeholders).
+- `src/index.template.html`: Page shell (head, stylesheet link, section placeholders).
+- `src/404.html`: Standalone "page not found" page, copied to root `404.html` by the build.
+- `404.html`, `robots.txt`, `sitemap.xml`: Generated deployable output.
 - `sections/*.html`: Top-level content fragments.
-- `css/design-tokens.css`: Shared custom CSS atoms (`.blueprint-grid`, `.param-input`, selection, icon settings).
+- `tailwind.config.js`: Tailwind v3.4 config (color tokens, fonts, zeroed radius scale, content globs).
+- `css/design-tokens.css`: Tailwind input: `@tailwind` directives, `:root` tokens, and shared custom CSS atoms (`.blueprint-grid`, `.param-input`, selection).
+- `css/site.css`: Generated, minified stylesheet the page loads. Do not edit it directly.
 - `js/form-handler.js`: Shared client-side form behavior.
-- `scripts/build_site.py`: Build script that assembles template + section fragments into `index.html`.
+- `scripts/build_site.py`: Build script that compiles `css/site.css` with Tailwind, assembles template + section fragments into `index.html`, copies `src/404.html`, and writes `robots.txt` and `sitemap.xml`.
 
 ## Section Source Files
 
@@ -31,12 +35,13 @@ Edit one or more of:
 
 - `src/index.template.html`
 - `sections/*.html`
+- `tailwind.config.js`
 - `css/design-tokens.css`
 - `js/form-handler.js`
 
 ### 2) Rebuild generated output
 
-Run:
+Requires Python 3 and Node.js with npm (the build runs a pinned `npx --yes tailwindcss@3.4.17`; there is no `package.json`, and the first run downloads the CLI into the npm cache). Run:
 
 ```powershell
 python scripts/build_site.py
@@ -50,7 +55,7 @@ If you are using the workspace virtual environment, run:
 
 ### 3) Verify
 
-- Confirm `index.html` was regenerated.
+- Confirm the build outputs (`css/site.css`, `index.html`, `404.html`, `robots.txt`, `sitemap.xml`) were regenerated, and commit them (Vercel serves the committed files as-is).
 - Serve the repo root (the page uses absolute paths like `/favicon.png`, so `file://` won't work), then check the changed sections at `http://localhost:8765`:
 
 ```powershell
@@ -69,15 +74,15 @@ See `DESIGN.md` and `.github` instructions for full project conventions.
 
 ## Notes
 
-- Tailwind is loaded via CDN in the template.
-- Root `index.html` is generated from source and should be treated as build output.
+- Tailwind is compiled at build time into `css/site.css`; the page loads no Tailwind script.
+- Root `index.html`, `404.html`, `robots.txt`, `sitemap.xml`, and `css/site.css` are generated from source and should be treated as build output.
 
 ## Deployment (Vercel)
 
-The site is a Git-connected Vercel project: pushing to `main` deploys production, and every other branch gets a preview deployment (behind Vercel login). There is no build step on Vercel; the committed `index.html` is served as-is.
+The site is a Git-connected Vercel project: pushing to `main` deploys production, and every other branch gets a preview deployment (behind Vercel login). There is no build step on Vercel; the committed build outputs are served as-is. The production domain is `hornsloth.com` (DNS on Vercel; `www` redirects to the apex).
 
-- `.vercelignore` is an allowlist: only `index.html`, `css/`, `js/`, `favicon.png`, `api/`, `requirements.txt`, and `vercel.json` are deployed. Sources, docs, and the resume PDF stay private. Allow any new runtime file there.
-- `vercel.json` sets `cleanUrls`, security headers, and the function's `maxDuration`.
+- `.vercelignore` is an allowlist: only `index.html`, `404.html`, `robots.txt`, `sitemap.xml`, `css/` (except the Tailwind input `css/design-tokens.css`), `js/`, `favicon.png`, `api/`, `requirements.txt`, and `vercel.json` are deployed. Sources (including `tailwind.config.js`), docs, and the resume PDF stay private. Allow any new runtime file there.
+- `vercel.json` sets `cleanUrls`, the `www` → apex redirect, security headers (including a strict Content-Security-Policy), and the function's `maxDuration`. The CSP allows only same-origin scripts, styles, and fetches, plus Google Fonts (`fonts.googleapis.com` styles, `fonts.gstatic.com` fonts) and `lh3.googleusercontent.com` images. Inline scripts, `<style>` blocks, and `style=` attributes are blocked; add any new external host to the policy.
 
 ## Contact Backend (Vercel Function)
 
@@ -98,6 +103,7 @@ The contact form posts to `/api/contact`, a Python Vercel Function (`api/contact
    - `RESEND_API_KEY`: the Resend key (mark it Sensitive)
    - `CONTACT_MAIL_TO`: where notifications go
    - `CONTACT_MAIL_FROM`: e.g. `Hornsloth Portfolio <contact@hornsloth.com>` (must be on the verified domain)
+   - `CONTACT_IP_HASH_SECRET`: a long random string (mark it Sensitive), e.g. from `python -c "import secrets; print(secrets.token_hex(32))"`. It keys the HMAC-SHA256 of the visitor IP used for rate limiting, so hashes stored after the secret is set can't be reversed by hashing every IPv4 address. Rows written before that keep their plain SHA-256 hash and stay reversible. If it is unset the function falls back to plain SHA-256 and logs a warning once per instance. Changing it resets every rate-limit window once.
 5. Redeploy so the function picks up the variables.
 
 ### Secrets management
@@ -108,9 +114,9 @@ The contact form posts to `/api/contact`, a Python Vercel Function (`api/contact
 ### API behavior
 
 - Method: `POST` only (anything else is 405)
-- Content types: `application/json`, `application/x-www-form-urlencoded` (the no-JS form fallback)
+- Content type: `application/json` only; nothing else is validated or stored. No-JS / failed-JS browser submits (a navigation, i.e. `Sec-Fetch-Mode: navigate` or `Accept` containing `text/html`, with a urlencoded, multipart, or empty content type) get a `400` HTML page saying the message was not sent, with an email link and a pointer to the browser's Back button (which restores the typed text; a link to `/#contact` would load an empty form). Every other non-JSON request, including API clients that forget `-ContentType "application/json"`, gets a `415` JSON error. The page also has a `<noscript>` note with the email address.
 - Required fields: `name`, `email`, `subject`, `message`
-- Abuse controls: honeypot (`company_website`), fill-time (`form_fill_seconds`), and 5 requests per 5 minutes per hashed IP
+- Abuse controls: honeypot (`company_website`), fill-time (`form_fill_seconds`), and 5 requests per 5 minutes per IP hash (HMAC-SHA256 keyed by `CONTACT_IP_HASH_SECRET`; plain SHA-256 if it is unset). The raw IP is never stored.
 - Once a submission is stored the response is success even if the email fails; check the Vercel runtime logs and rows with `status = 'email_failed'`
 
 ### Frontend hook

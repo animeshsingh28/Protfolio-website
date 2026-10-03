@@ -11,20 +11,32 @@ Environment (set in the Vercel project):
   CONTACT_MAIL_TO   Where notifications go
   CONTACT_MAIL_FROM Sender, on a domain verified in Resend,
                     e.g. "Hornsloth Portfolio <contact@hornsloth.com>"
+  CONTACT_IP_HASH_SECRET
+                    Key for the HMAC-SHA256 of the visitor IP used for rate
+                    limiting (mark it Sensitive). If unset, a plain SHA-256 is
+                    used and a warning is logged once per function instance.
+                    Changing it resets every rate-limit window once.
+
+Only application/json bodies are processed; nothing else reaches validation or
+the database. A no-JS / failed-JS browser submit (a navigation, i.e.
+Sec-Fetch-Mode: navigate or Accept containing text/html, with a urlencoded,
+multipart, or empty content type) gets a 400 HTML page saying the message was
+not sent, with an email link. Every other non-JSON request is a 415 JSON error.
 """
 
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
 import re
 import secrets
+import threading
 import time
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler
-from urllib.parse import parse_qs
 
 import psycopg
 
@@ -34,9 +46,17 @@ RATE_LIMIT_MAX_REQUESTS = 5
 MAX_BODY_BYTES = 64 * 1024
 # Keep the worst case well under maxDuration (20s in vercel.json): a killed
 # invocation after the INSERT leaves the visitor unsure whether it was sent.
-# urlopen applies its timeout to the connect and to each read separately.
+# With a responsive database: connect (5s) + the insert transaction (slow
+# queries and lock waits capped at DB_STATEMENT_TIMEOUT_MS each) + the mail
+# call, cut off REQUEST_BUDGET_SECONDS after the request started, + the status
+# update (one more cap) = about 16s. statement_timeout is enforced by the
+# server, so it does not bound a pooler queue wait or a stalled connection;
+# those can still run into maxDuration.
 DB_CONNECT_TIMEOUT_SECONDS = 5
+DB_STATEMENT_TIMEOUT_MS = 2000
 MAIL_TIMEOUT_SECONDS = 4
+REQUEST_BUDGET_SECONDS = 14
+MIN_MAIL_SECONDS = 1.5
 
 # Mirror the column sizes in db/schema.sql and the inputs' maxlength in
 # sections/contact.html; change all three together.
@@ -45,10 +65,11 @@ MAX_LENGTHS = {"name": 100, "email": 254, "subject": 150, "message": 5000}
 RESEND_URL = "https://api.resend.com/emails"
 SUCCESS_MESSAGE = "Message received. I will get back to you soon."
 
-# The WHATWG rule browsers use for <input type="email">, so the server accepts
-# exactly what the form's client-side validation does, plus a dotted domain.
+# The WHATWG rule browsers use for <input type="email">, plus a dotted domain
+# and no leading, trailing, or doubled dots in the local part (RFC 5321; Resend
+# rejects those as reply_to, which would silently lose the notification).
 EMAIL_RE = re.compile(
-    r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+"
+    r"^(?!\.)(?!.*\.\.)[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+(?<!\.)"
     r"@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
     r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+\Z"
 )
@@ -77,9 +98,46 @@ def header_safe(value: str) -> str:
     return value.replace("\r", " ").replace("\n", " ").strip()
 
 
+FORM_CONTENT_TYPES = ("application/x-www-form-urlencoded", "multipart/form-data")
+
+# Shown when the native form submit reaches the API (JS off, or form-handler.js
+# failed to load or threw). Plain HTML: no inline styles or scripts. It points
+# to the Back button rather than linking to /#contact: a fresh page load would
+# empty the form, while Back restores the visitor's text so they can copy it.
+# The email address also appears in sections/contact.html; change both together.
+NO_JS_PAGE = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Message not sent</title>
+</head>
+<body>
+<main>
+<h1>Your message was not sent</h1>
+<p>The contact form needs JavaScript, which did not run in your browser, so nothing was delivered.</p>
+<p>Please email me instead at <a href="mailto:animeshsingh5770@gmail.com">animeshsingh5770@gmail.com</a>.</p>
+<p>Your text is not lost: use your browser's Back button to return to the form, copy your message, and paste it into an email.</p>
+</main>
+</body>
+</html>
+""".encode("utf-8")
+
+
+def is_browser_navigation(sec_fetch_mode: str, accept: str) -> bool:
+    # A native form submit is a top-level navigation; fetch() and API clients
+    # (curl, urllib, Invoke-RestMethod) are not and don't ask for HTML.
+    return sec_fetch_mode.strip().lower() == "navigate" or "text/html" in accept.lower()
+
+
+def is_form_submit(content_type: str) -> bool:
+    # What a browser sends for the plain HTML form (no enctype -> urlencoded).
+    content_type = content_type.strip().lower()
+    return content_type == "" or any(kind in content_type for kind in FORM_CONTENT_TYPES)
+
+
 def parse_body(content_type: str, raw: bytes) -> dict:
-    content_type = content_type.lower()
-    if "application/json" in content_type:
+    if "application/json" in content_type.lower():
         try:
             data = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, ValueError):
@@ -87,11 +145,29 @@ def parse_body(content_type: str, raw: bytes) -> dict:
         if not isinstance(data, dict):
             raise ApiError(400, "Invalid JSON payload")
         return data
-    # A no-JS form submit arrives urlencoded.
-    if "application/x-www-form-urlencoded" in content_type or content_type == "":
-        parsed = parse_qs(raw.decode("utf-8", errors="replace"), keep_blank_values=True)
-        return {key: values[0] for key, values in parsed.items()}
     raise ApiError(415, "Unsupported payload type")
+
+
+_ip_secret_warned = False
+
+
+def warn_ip_secret_missing_once() -> None:
+    # Once per process, not per request, so the logs stay readable. No lock:
+    # at worst two concurrent requests log the line twice.
+    global _ip_secret_warned
+    if not _ip_secret_warned:
+        _ip_secret_warned = True
+        log("CONTACT_IP_HASH_SECRET is not set; using unkeyed SHA-256 for the IP hash")
+
+
+def hash_ip(ip: str) -> str:
+    # Keyed, so the stored hash can't be reversed by hashing every IPv4 address.
+    secret = (os.environ.get("CONTACT_IP_HASH_SECRET") or "").strip()
+    if secret:
+        return hmac.new(secret.encode("utf-8"), ip.encode("utf-8"), hashlib.sha256).hexdigest()
+    # A privacy setting must not take the form down: fall back, but say so.
+    warn_ip_secret_missing_once()
+    return hashlib.sha256(ip.encode("utf-8")).hexdigest()
 
 
 def validate(data: dict) -> dict:
@@ -126,7 +202,7 @@ def database_url() -> str:
     return url
 
 
-def send_mail(fields: dict, request_id: str) -> bool:
+def send_mail(fields: dict, request_id: str, timeout: float) -> bool:
     api_key = os.environ.get("RESEND_API_KEY")
     to = os.environ.get("CONTACT_MAIL_TO")
     sender = os.environ.get("CONTACT_MAIL_FROM")
@@ -167,7 +243,7 @@ def send_mail(fields: dict, request_id: str) -> bool:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=MAIL_TIMEOUT_SECONDS) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             return 200 <= response.status < 300
     except urllib.error.HTTPError as error:
         log(f"resend returned HTTP {error.code} for request {request_id}")
@@ -177,27 +253,75 @@ def send_mail(fields: dict, request_id: str) -> bool:
     return False
 
 
+def send_mail_within(fields: dict, request_id: str, seconds: float) -> bool:
+    """send_mail with a hard wall-clock limit. urlopen's timeout covers the
+    connect and each read, but not the DNS lookup, so the call runs in a daemon
+    thread that is abandoned (counted as failed) when the time is up. An
+    abandoned call can still deliver later (on Vercel, possibly while a later
+    invocation runs); that is logged, so an email_failed row whose request id
+    has a late-delivery line was in fact notified."""
+    lock = threading.Lock()
+    state = {"sent": None, "abandoned": False}
+
+    def run() -> None:
+        sent = send_mail(fields, request_id, min(MAIL_TIMEOUT_SECONDS, seconds))
+        # Under the lock, so the result and the abandon decision can't cross.
+        with lock:
+            state["sent"] = sent
+            late = state["abandoned"]
+        if late and sent:
+            log(f"late delivery: email for request {request_id} was sent after the call was abandoned; its row says email_failed")
+
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    worker.join(seconds)
+    with lock:
+        if state["sent"] is None:
+            state["abandoned"] = True
+            log(f"resend call for request {request_id} ran out of time and was abandoned")
+            return False
+        return state["sent"]
+
+
+def limit_statement_time(conn: psycopg.Connection) -> None:
+    # Like SET LOCAL: ends with the transaction, so the setting can't leak to
+    # other clients through Neon's transaction-mode pooler. Only works inside
+    # an explicit transaction; under autocommit it would end immediately.
+    conn.execute(
+        "SELECT set_config('statement_timeout', %s, true)", (f"{DB_STATEMENT_TIMEOUT_MS}ms",)
+    )
+
+
 def update_status_best_effort(conn: psycopg.Connection, request_id: str, status: str) -> None:
     # The row is already stored, so a failed status update must not turn the
     # response into an error and invite a duplicate resend.
     try:
-        if status == "emailed":
-            conn.execute(
-                "UPDATE contact_submissions SET status = %s, email_sent_at = now() WHERE request_id = %s",
-                (status, request_id),
-            )
-        else:
-            conn.execute(
-                "UPDATE contact_submissions SET status = %s WHERE request_id = %s",
-                (status, request_id),
-            )
+        with conn.transaction():
+            limit_statement_time(conn)
+            if status == "emailed":
+                conn.execute(
+                    "UPDATE contact_submissions SET status = %s, email_sent_at = now() WHERE request_id = %s",
+                    (status, request_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE contact_submissions SET status = %s WHERE request_id = %s",
+                    (status, request_id),
+                )
     except Exception as error:
         log(f"status update to {status} failed for request {request_id}: {type(error).__name__}")
 
 
-def handle_submission(fields: dict, ip: str, user_agent: str) -> dict:
+def mail_seconds_left(started: float) -> float | None:
+    """What is left of the request budget for the mail call, or None when too
+    little is left to try (the row is then marked email_failed)."""
+    remaining = REQUEST_BUDGET_SECONDS - (time.monotonic() - started)
+    return remaining if remaining >= MIN_MAIL_SECONDS else None
+
+
+def handle_submission(fields: dict, ip: str, user_agent: str, started: float) -> dict:
     request_id = secrets.token_hex(16)
-    ip_hash = hashlib.sha256(ip.encode("utf-8")).hexdigest()
+    ip_hash = hash_ip(ip)
 
     # autocommit outside the transaction block: the row must be committed
     # before the email goes out.
@@ -205,6 +329,10 @@ def handle_submission(fields: dict, ip: str, user_agent: str) -> dict:
         database_url(), autocommit=True, connect_timeout=DB_CONNECT_TIMEOUT_SECONDS
     ) as conn:
         with conn.transaction():
+            # Covers the lock wait too, so a slow query or a stuck lock holder
+            # fails fast (500, nothing stored) instead of running into
+            # maxDuration. Server-side only: see DB_STATEMENT_TIMEOUT_MS.
+            limit_statement_time(conn)
             # Serialize count-then-insert per IP, so a parallel burst can't
             # all see the same count. Transaction-scoped, so it is safe
             # behind Neon's transaction-mode pooler.
@@ -232,7 +360,10 @@ def handle_submission(fields: dict, ip: str, user_agent: str) -> dict:
                 ),
             )
 
-        if send_mail(fields, request_id):
+        seconds = mail_seconds_left(started)
+        if seconds is None:
+            log(f"skipping email for request {request_id}: request time budget used up")
+        if seconds is not None and send_mail_within(fields, request_id, seconds):
             update_status_best_effort(conn, request_id, "emailed")
         else:
             update_status_best_effort(conn, request_id, "email_failed")
@@ -254,6 +385,16 @@ class handler(BaseHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(body)
 
+    def respond_no_js_page(self) -> None:
+        # 400, not a redirect: the visitor must see that nothing was sent.
+        body = NO_JS_PAGE
+        self.send_response(400)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def method_not_allowed(self) -> None:
         self.respond(405, {"success": False, "message": "Method not allowed"})
 
@@ -266,7 +407,20 @@ class handler(BaseHTTPRequestHandler):
         return forwarded.split(",")[0].strip() or self.client_address[0]
 
     def do_POST(self) -> None:
+        started = time.monotonic()
         try:
+            content_type = self.headers.get("Content-Type") or ""
+            # Without JS there is no fill-time value, so a native form submit
+            # can't pass the bot checks; store nothing and tell the visitor so.
+            # Checked before the size check (and without reading the body), so
+            # an oversized native submit also gets the readable page rather
+            # than a bare JSON 413.
+            if is_form_submit(content_type) and is_browser_navigation(
+                self.headers.get("Sec-Fetch-Mode") or "", self.headers.get("Accept") or ""
+            ):
+                self.respond_no_js_page()
+                return
+
             try:
                 length = int(self.headers.get("Content-Length") or 0)
             except ValueError:
@@ -274,10 +428,11 @@ class handler(BaseHTTPRequestHandler):
             if length < 0 or length > MAX_BODY_BYTES:
                 raise ApiError(413, "Payload too large")
 
-            data = parse_body(self.headers.get("Content-Type") or "", self.rfile.read(length))
+            # Anything that isn't JSON (API clients included) is a 415 here.
+            data = parse_body(content_type, self.rfile.read(length))
             fields = validate(data)
             user_agent = clean_text((self.headers.get("User-Agent") or "")[:255])
-            self.respond(200, handle_submission(fields, self.client_ip(), user_agent))
+            self.respond(200, handle_submission(fields, self.client_ip(), user_agent, started))
         except ApiError as error:
             self.respond(error.status, {"success": False, "message": error.message})
         except Exception as error:

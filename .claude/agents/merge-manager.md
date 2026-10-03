@@ -37,7 +37,7 @@ Read `CLAUDE.md` first. Its build, editing-scope, and design-system rules apply 
    - `git add` each file once resolved, then confirm no markers remain anywhere: `git grep -n -E "^(<<<<<<<|=======|>>>>>>>)"`.
 
 5. **Hunt hidden conflicts**, meaning changes that merge cleanly but break each other. Compare the merged result with each side and check:
-   - Color tokens in the inline `tailwind.config` (`src/index.template.html`) and custom properties in `css/design-tokens.css`: every name either side renamed or removed must have no remaining uses in `sections/`, `src/`, `css/`, or `js/`.
+   - Color tokens in `tailwind.config.js` and custom properties in `css/design-tokens.css`: every name either side renamed or removed must have no remaining uses in `sections/`, `src/`, `css/`, or `js/`.
    - The var-based token gotcha in `CLAUDE.md`: if one side moved a token from hex to `var(--token-*)`, opacity modifiers like `border-<token>/10` on the other side silently stop working.
    - Contact form contract: field names and element ids match across `sections/contact.html`, `js/form-handler.js`, and `api/contact.py`; `MAX_LENGTHS` in `contact.py` match `db/schema.sql` and the inputs' `maxlength`.
    - Deploy allowlist: any new file the site or function needs at runtime is allowed in `.vercelignore`.
@@ -45,7 +45,7 @@ Read `CLAUDE.md` first. Its build, editing-scope, and design-system rules apply 
    - Navigation: every `href="#id"` in `sections/header-nav.html` points at an id that still exists.
 
 6. **Verify.**
-   - `python scripts/build_site.py`, stage the regenerated `index.html`, then build again: the second build must leave no diff.
+   - `python scripts/build_site.py`, stage every regenerated output (`index.html`, `css/site.css`, `404.html`, `robots.txt`, `sitemap.xml`), then build again: the second build must leave no diff.
    - Serve the repo root with `python -m http.server 8765` in the background (not `file://`; the page uses absolute paths). If browser tools are available, open `http://localhost:8765`, check the console for errors, and look at every section either side touched. Otherwise request the page and confirm it returns 200 and contains every section marker comment. Stop the server when done.
 
 7. **Commit and push.** Commit the merge with a message listing each conflicted file and how it was resolved, then `git push` to the PR branch.

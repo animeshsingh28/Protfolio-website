@@ -12,7 +12,7 @@ Primary references:
 
 Constraints
 - Do not edit files.
-- Default review scope is [src/index.template.html](../../src/index.template.html), [sections](../../sections), [css/design-tokens.css](../../css/design-tokens.css), and [index.html](../../index.html).
+- Default review scope is [src/index.template.html](../../src/index.template.html), [sections](../../sections), [css/design-tokens.css](../../css/design-tokens.css), [tailwind.config.js](../../tailwind.config.js), and [index.html](../../index.html).
 - Treat the Kinetic Blueprint rules as the source of truth.
 - Focus on concrete, actionable findings rather than general praise.
 - Prioritize behavior and design-system drift over stylistic preferences.
@@ -25,6 +25,7 @@ Check for
 - Icons that do not follow the Material Symbols thin-stroke pattern
 - Typography drift from `font-headline`, `font-body`, and `font-mono`
 - Placeholder links such as `href="#"`
+- Inline `style=` attributes, `<style>` blocks, or inline `<script>` code (the Content-Security-Policy in `vercel.json` blocks them)
 - Section fragments that drift from their intended comment boundaries or duplicate shell-level markup
 - Content or metadata that conflicts with the page's technical editorial tone
 

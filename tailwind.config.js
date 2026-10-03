@@ -1,0 +1,81 @@
+// Tailwind CSS v3.4 config. Compiled by scripts/build_site.py
+// (css/design-tokens.css -> css/site.css). Not deployed (see .vercelignore).
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+    content: [
+        "./src/**/*.html",
+        "./sections/**/*.html",
+        // Also picks up classes js/ adds at runtime (e.g. the form status tones).
+        "./js/**/*.js",
+    ],
+    // Status-line tones set by js/form-handler.js via classList. They are
+    // string literals there, so the js/ glob finds them; listed here too so a
+    // refactor that builds the names dynamically can't silently drop them.
+    safelist: ["text-secondary", "text-tertiary", "text-error"],
+    darkMode: "class",
+    theme: {
+        extend: {
+            colors: {
+                "secondary-fixed": "#d4e4f6",
+                "on-background": "rgb(var(--token-on-background) / <alpha-value>)",
+                "secondary-container": "#394857",
+                "surface-container-highest": "#333538",
+                "inverse-surface": "#e2e2e6",
+                "on-surface": "#e2e2e6",
+                "surface-tint": "#ffb59e",
+                "surface-dim": "#111316",
+                "tertiary-fixed": "#9cf0ff",
+                "on-primary-container": "rgb(var(--token-on-primary-container) / <alpha-value>)",
+                "tertiary-container": "#009fb2",
+                "error": "#ffb4ab",
+                "secondary-fixed-dim": "#b8c8da",
+                "on-primary": "#5e1700",
+                "primary-fixed-dim": "#ffb59e",
+                "on-tertiary-container": "#002f35",
+                "surface-container-lowest": "#0c0e11",
+                "secondary": "#b8c8da",
+                "outline-variant": "rgb(var(--token-outline-variant) / <alpha-value>)",
+                "surface-variant": "#333538",
+                "on-tertiary": "#00363d",
+                "on-tertiary-fixed": "#001f24",
+                "on-secondary-fixed": "#0d1d2a",
+                "on-surface-variant": "#e6beb2",
+                "tertiary-fixed-dim": "#00daf3",
+                "on-error-container": "#ffdad6",
+                "error-container": "#93000a",
+                "inverse-primary": "#ae3200",
+                "on-secondary-fixed-variant": "#394857",
+                "inverse-on-surface": "#2f3034",
+                "primary-fixed": "#ffdbd0",
+                "on-primary-fixed": "#3a0b00",
+                "tertiary": "#00daf3",
+                "primary-container": "rgb(var(--token-primary-container) / <alpha-value>)",
+                "surface-container-low": "#1a1c1f",
+                "background": "#111316",
+                "primary": "rgb(var(--token-primary) / <alpha-value>)",
+                "surface-container-high": "#282a2d",
+                "on-secondary-container": "#a7b7c8",
+                "outline": "#ad897e",
+                "surface-bright": "#37393d",
+                "on-error": "#690005",
+                "surface": "#111316",
+                "on-primary-fixed-variant": "#852400",
+                "on-tertiary-fixed-variant": "#004f58",
+                "on-secondary": "#223240",
+                "surface-container": "#1e2023",
+            },
+            borderRadius: {
+                "DEFAULT": "0px",
+                "lg": "0px",
+                "xl": "0px",
+                "full": "0px",
+            },
+            fontFamily: {
+                "headline": ["Space Grotesk"],
+                "body": ["Inter"],
+                "mono": ["JetBrains Mono"],
+            },
+        },
+    },
+    plugins: [],
+};
