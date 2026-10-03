@@ -32,6 +32,7 @@ import json
 import os
 import re
 import secrets
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -45,9 +46,12 @@ RATE_LIMIT_MAX_REQUESTS = 5
 MAX_BODY_BYTES = 64 * 1024
 # Keep the worst case well under maxDuration (20s in vercel.json): a killed
 # invocation after the INSERT leaves the visitor unsure whether it was sent.
-# urlopen applies its timeout to the connect and to each read separately, so
-# the mail timeout is also capped by what is left of REQUEST_BUDGET_SECONDS.
+# Worst case: connect (5s) + the insert transaction (each statement capped at
+# DB_STATEMENT_TIMEOUT_MS) + the mail call, which is cut off
+# REQUEST_BUDGET_SECONDS after the request started, + the status update (one
+# more statement cap) = about 16s.
 DB_CONNECT_TIMEOUT_SECONDS = 5
+DB_STATEMENT_TIMEOUT_MS = 2000
 MAIL_TIMEOUT_SECONDS = 4
 REQUEST_BUDGET_SECONDS = 14
 MIN_MAIL_SECONDS = 1.5
@@ -247,32 +251,59 @@ def send_mail(fields: dict, request_id: str, timeout: float) -> bool:
     return False
 
 
+def send_mail_within(fields: dict, request_id: str, seconds: float) -> bool:
+    """send_mail with a hard wall-clock limit. urlopen's timeout covers the
+    connect and each read, but not the DNS lookup, so the call runs in a daemon
+    thread that is abandoned (counted as failed) when the time is up. An
+    abandoned call can still deliver later; the row then says email_failed."""
+    result: list[bool] = []
+    worker = threading.Thread(
+        target=lambda: result.append(
+            send_mail(fields, request_id, min(MAIL_TIMEOUT_SECONDS, seconds))
+        ),
+        daemon=True,
+    )
+    worker.start()
+    worker.join(seconds)
+    if worker.is_alive():
+        log(f"resend call for request {request_id} ran out of time and was abandoned")
+        return False
+    return bool(result) and result[0]
+
+
+def limit_statement_time(conn: psycopg.Connection) -> None:
+    # Like SET LOCAL: ends with the transaction, so the setting can't leak to
+    # other clients through Neon's transaction-mode pooler.
+    conn.execute(
+        "SELECT set_config('statement_timeout', %s, true)", (f"{DB_STATEMENT_TIMEOUT_MS}ms",)
+    )
+
+
 def update_status_best_effort(conn: psycopg.Connection, request_id: str, status: str) -> None:
     # The row is already stored, so a failed status update must not turn the
     # response into an error and invite a duplicate resend.
     try:
-        if status == "emailed":
-            conn.execute(
-                "UPDATE contact_submissions SET status = %s, email_sent_at = now() WHERE request_id = %s",
-                (status, request_id),
-            )
-        else:
-            conn.execute(
-                "UPDATE contact_submissions SET status = %s WHERE request_id = %s",
-                (status, request_id),
-            )
+        with conn.transaction():
+            limit_statement_time(conn)
+            if status == "emailed":
+                conn.execute(
+                    "UPDATE contact_submissions SET status = %s, email_sent_at = now() WHERE request_id = %s",
+                    (status, request_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE contact_submissions SET status = %s WHERE request_id = %s",
+                    (status, request_id),
+                )
     except Exception as error:
         log(f"status update to {status} failed for request {request_id}: {type(error).__name__}")
 
 
-def mail_timeout(started: float) -> float | None:
-    """Per-operation mail timeout from what is left of the budget, or None
-    when too little is left to try (the row is then marked email_failed)."""
+def mail_seconds_left(started: float) -> float | None:
+    """What is left of the request budget for the mail call, or None when too
+    little is left to try (the row is then marked email_failed)."""
     remaining = REQUEST_BUDGET_SECONDS - (time.monotonic() - started)
-    if remaining < MIN_MAIL_SECONDS:
-        return None
-    # Connect, TLS handshake, and response read can each take the full timeout.
-    return min(MAIL_TIMEOUT_SECONDS, remaining / 3)
+    return remaining if remaining >= MIN_MAIL_SECONDS else None
 
 
 def handle_submission(fields: dict, ip: str, user_agent: str, started: float) -> dict:
@@ -285,6 +316,10 @@ def handle_submission(fields: dict, ip: str, user_agent: str, started: float) ->
         database_url(), autocommit=True, connect_timeout=DB_CONNECT_TIMEOUT_SECONDS
     ) as conn:
         with conn.transaction():
+            # Covers the lock wait too, so a stalled pooler or a stuck lock
+            # holder fails fast (500, nothing stored) instead of running into
+            # maxDuration.
+            limit_statement_time(conn)
             # Serialize count-then-insert per IP, so a parallel burst can't
             # all see the same count. Transaction-scoped, so it is safe
             # behind Neon's transaction-mode pooler.
@@ -312,10 +347,10 @@ def handle_submission(fields: dict, ip: str, user_agent: str, started: float) ->
                 ),
             )
 
-        timeout = mail_timeout(started)
-        if timeout is None:
+        seconds = mail_seconds_left(started)
+        if seconds is None:
             log(f"skipping email for request {request_id}: request time budget used up")
-        if timeout is not None and send_mail(fields, request_id, timeout):
+        if seconds is not None and send_mail_within(fields, request_id, seconds):
             update_status_best_effort(conn, request_id, "emailed")
         else:
             update_status_best_effort(conn, request_id, "email_failed")
@@ -361,30 +396,27 @@ class handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         started = time.monotonic()
         try:
+            content_type = self.headers.get("Content-Type") or ""
+            # Without JS there is no fill-time value, so a native form submit
+            # can't pass the bot checks; store nothing and tell the visitor so.
+            # Checked before the size check (and without reading the body), so
+            # an oversized native submit also gets the readable page rather
+            # than a bare JSON 413.
+            if is_form_submit(content_type) and is_browser_navigation(
+                self.headers.get("Sec-Fetch-Mode") or "", self.headers.get("Accept") or ""
+            ):
+                self.respond_no_js_page()
+                return
+
             try:
                 length = int(self.headers.get("Content-Length") or 0)
             except ValueError:
                 length = -1
-            content_type = self.headers.get("Content-Type") or ""
-            # Without JS there is no fill-time value, so a native form submit
-            # can't pass the bot checks; store nothing and tell the visitor so.
-            # Decided before the size check, so an oversized native submit also
-            # gets the readable page rather than a bare JSON 413.
-            native_submit = is_form_submit(content_type) and is_browser_navigation(
-                self.headers.get("Sec-Fetch-Mode") or "", self.headers.get("Accept") or ""
-            )
             if length < 0 or length > MAX_BODY_BYTES:
-                if native_submit:
-                    self.respond_no_js_page()
-                    return
                 raise ApiError(413, "Payload too large")
 
-            raw = self.rfile.read(length)
-            if native_submit:
-                self.respond_no_js_page()
-                return
             # Anything that isn't JSON (API clients included) is a 415 here.
-            data = parse_body(content_type, raw)
+            data = parse_body(content_type, self.rfile.read(length))
             fields = validate(data)
             user_agent = clean_text((self.headers.get("User-Agent") or "")[:255])
             self.respond(200, handle_submission(fields, self.client_ip(), user_agent, started))

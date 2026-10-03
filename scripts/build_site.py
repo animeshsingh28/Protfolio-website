@@ -67,16 +67,15 @@ def build_css() -> None:
     ]
     # The CLI bundles its own autoprefixer/caniuse data, but which browsers it
     # targets comes from the environment (BROWSERSLIST, .browserslistrc or a
-    # package.json "browserslist" key in any parent directory). Pin the query
-    # so the output depends only on TAILWIND_VERSION and the sources, and
-    # silence the "caniuse-lite is outdated" nag about the bundled data.
+    # package.json "browserslist" key in any parent directory). BROWSERSLIST
+    # takes precedence over every config file, so setting it pins the output to
+    # TAILWIND_VERSION and the sources. Also silence the "caniuse-lite is
+    # outdated" nag about the bundled data.
     env = {
-        key: value
-        for key, value in os.environ.items()
-        if key not in ("BROWSERSLIST_CONFIG", "BROWSERSLIST_ENV")
+        **os.environ,
+        "BROWSERSLIST": BROWSERSLIST_QUERY,
+        "BROWSERSLIST_IGNORE_OLD_DATA": "1",
     }
-    env["BROWSERSLIST"] = BROWSERSLIST_QUERY
-    env["BROWSERSLIST_IGNORE_OLD_DATA"] = "1"
     try:
         # cwd=ROOT so the config's relative content globs resolve to the repo.
         subprocess.run(command, cwd=ROOT, env=env, check=True)
